@@ -1,0 +1,46 @@
+{
+  "format": "bpnhs-draft",
+  "version": 1,
+  "name": "JHS SIDE BUILDING",
+  "width": 1600,
+  "height": 1000,
+  "floors": {
+    "Floor 1": [
+      {
+        "kind": "room",
+        "x": 369.2,
+        "y": 36.807785577536634,
+        "width": 301.59999999999997,
+        "height": 334.1922144224634,
+        "rotation": 0,
+        "stroke": 2,
+        "color": "#111111",
+        "fill": "#FFFFFF",
+        "text": "Room",
+        "font_size": 18,
+        "steps": 12,
+        "mirrored": false,
+        "id": "2dcfdbb8cf57402fa62b515fc7279698"
+      },
+      {
+        "kind": "door",
+        "x": 311.03682028997537,
+        "y": 360.8260436690483,
+        "width": 60,
+        "height": 60,
+        "rotation": 271.085949948064,
+        "stroke": 2,
+        "color": "#111111",
+        "fill": "none",
+        "text": "Room",
+        "font_size": 18,
+        "steps": 12,
+        "mirrored": false,
+        "id": "31d83f151f3a46d1bdc996eaeae8f743"
+      }
+    ],
+    "Floor 2": [],
+    "Floor 3": [],
+    "Floor 4": []
+  }
+}

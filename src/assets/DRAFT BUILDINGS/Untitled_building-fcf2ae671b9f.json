@@ -1,0 +1,46 @@
+{
+  "format": "bpnhs-draft",
+  "version": 1,
+  "name": "Untitled building",
+  "width": 1600,
+  "height": 1000,
+  "floors": {
+    "Floor 1": [
+      {
+        "kind": "room",
+        "x": 398.29482071690074,
+        "y": 22.363620518934113,
+        "width": 364.6215139442231,
+        "height": 397.76892430278906,
+        "rotation": 0,
+        "stroke": 2,
+        "color": "#111111",
+        "fill": "#FFFFFF",
+        "text": "Room",
+        "font_size": 18,
+        "steps": 12,
+        "mirrored": false,
+        "id": "2fbad2882eea4c4194c92169c864825f"
+      },
+      {
+        "kind": "door",
+        "x": 338.34341299303253,
+        "y": 400.28993664226243,
+        "width": 60,
+        "height": 60,
+        "rotation": 270.5489902010167,
+        "stroke": 2,
+        "color": "#111111",
+        "fill": "none",
+        "text": "Room",
+        "font_size": 18,
+        "steps": 12,
+        "mirrored": false,
+        "id": "e1005f8e0a66401a923c6c4fa89325fa"
+      }
+    ],
+    "Floor 2": [],
+    "Floor 3": [],
+    "Floor 4": []
+  }
+}
