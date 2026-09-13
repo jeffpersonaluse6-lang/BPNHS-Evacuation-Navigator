@@ -1,4 +1,4 @@
-"""Shared selected-player inspector and centered, non-interactive collision guide."""
+"""Player inspector panel and collision preview guide."""
 
 import flet as ft
 from .player_settings import PlayerSettings,load_player_settings,save_player_settings,PLAYER_SETTINGS_FILE

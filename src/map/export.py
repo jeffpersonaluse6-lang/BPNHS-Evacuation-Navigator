@@ -1,4 +1,4 @@
-"""Placement-code export shared by the integrated and legacy editors."""
+"""Export placements as Python code."""
 
 from dataclasses import fields
 

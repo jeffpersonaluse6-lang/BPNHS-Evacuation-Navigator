@@ -1,4 +1,4 @@
-"""Explicit floor transition zones shared by runtime and editor."""
+"""Floor transition zones for runtime and editor."""
 
 from .stairs import STAIR_KINDS
 
@@ -10,7 +10,7 @@ def orientation(zone):
 
 
 def progress(zone,point):
-    """Return clamped progress, lateral corridor membership, and raw progress."""
+    """Progress through the zone, plus whether the point is laterally inside."""
     x,y=zone.world_to_local(*point)
     axis=orientation(zone)
     if axis in {"up","down"}:

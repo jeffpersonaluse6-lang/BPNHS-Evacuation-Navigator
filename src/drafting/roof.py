@@ -1,4 +1,4 @@
-"""Editable rectangular hip-roof geometry for canvas and SVG exports."""
+"""Hip-roof seam lines for canvas and SVG."""
 
 
 def roof_seams(width, height):

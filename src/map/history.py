@@ -1,4 +1,4 @@
-"""Reversible placement changes, including insertion and deletion anywhere."""
+"""Placement undo/redo for insert, move, and delete."""
 
 from dataclasses import dataclass
 

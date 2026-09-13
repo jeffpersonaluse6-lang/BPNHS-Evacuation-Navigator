@@ -1,4 +1,4 @@
-"""Canvas renderer sharing exact geometry with the SVG exporter."""
+"""Canvas drawing that matches the SVG export geometry."""
 
 import math
 from functools import lru_cache

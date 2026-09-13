@@ -1,4 +1,4 @@
-"""Retained, dirty-control updates for drag/resize/draw gestures (editor only)."""
+"""Retained gesture updates for drag/resize/draw — editor only."""
 
 import flet as ft
 from dataclasses import replace
@@ -48,7 +48,7 @@ class Interaction:
             wrapper=None
             if editor.active_handle:
                 wrapper=ft.Stack(width=editor.document.width,height=editor.document.height,controls=[control])
-                # Only resize/rotation needs a wrapper; translations retain the tree.
+                # Only resize/rotation needs a wrapper; translations keep the tree.
                 for number,node in enumerate(editor.scene_stack.controls):
                     if node is control: editor.scene_stack.controls[number]=wrapper;break
             self.image_records.append((key,control,control.left,control.top,cached,wrapper))
@@ -85,11 +85,11 @@ class Interaction:
                     a,b=project(self.parent,before.x,before.y),project(self.parent,after.x,after.y)
                     dx,dy=b[0]-a[0],b[1]-a[1]
                 control.left=(left or 0)+dx;control.top=(top or 0)+dy
-                # Reuse the exact geometry and guides; no collision work while translating.
+                # Reuse geometry and guides — no collision work during translation.
             else:
                 control.left,control.top=left,top
                 if moved_parent:
-                    # Child floor data stays fixed; only this parent's visible pieces change.
+                    # Child floor data stays put; only the parent's visible pieces change.
                     scope=self.child_scopes[key]
                     context=self.child_contexts.get(scope)
                     if context is None:
@@ -120,8 +120,8 @@ class Interaction:
         if update: editor.page.update(*dirty)
 
     def close(self):
-        # Restore retained baseline before final render, including on cancellation.
-        # Cache signatures still describe this baseline, not the temporary preview.
+        # Restore the retained baseline before the final render, including on cancel.
+        # Cache signatures still match this baseline, not the temporary preview.
         for key,control,left,top,shapes,signature in self.records:
             control.left,control.top,control.shapes=left,top,shapes
         for key,control,left,top,cached,wrapper in self.image_records:

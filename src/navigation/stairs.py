@@ -1,4 +1,4 @@
-"""Shared stair direction and normalized travel geometry (not screen axes)."""
+"""Stair direction and travel geometry (local axes, not screen)."""
 
 STAIR_KINDS={"stairs","double_stairs"}
 
@@ -25,7 +25,7 @@ def progress(item,section,point):
 
 
 def indicators(item):
-    """Local endpoints of editor arrows, plus labels for each flight."""
+    """Arrow endpoints and labels for each flight."""
     landing=min(24,item.height/5) if item.kind=="double_stairs" else 0
     result=[]
     for lo,hi,direction,_ in stair_sections(item):

@@ -1,4 +1,4 @@
-"""Live physical thickness controls, independent from visible object strokes."""
+"""Collision thickness controls, separate from visible strokes."""
 
 from dataclasses import replace
 import flet as ft

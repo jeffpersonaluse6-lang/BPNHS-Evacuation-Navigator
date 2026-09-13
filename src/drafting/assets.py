@@ -1,4 +1,4 @@
-"""Save a complete editable draft and a tightly framed current-floor SVG."""
+"""Save a draft and export a cropped SVG."""
 from pathlib import Path
 import uuid
 import xml.etree.ElementTree as ET
@@ -38,7 +38,7 @@ def save_map_draft(document,floor,assets_root):
     folder.mkdir(parents=True,exist_ok=True)
     name=''.join(c if c.isalnum() or c in '-_' else '_' for c in document.name)[:60] or 'building'
     stem=f'{name}-{uuid.uuid4().hex[:12]}'
-    # Unique sibling files preserve all earlier exports and editable floor data.
+    # Unique filenames so older exports aren't overwritten.
     (folder/f'{stem}.json').write_text(document.to_json(),encoding='utf-8')
     (folder/f'{stem}.svg').write_bytes(svg)
     return f'DRAFT BUILDINGS/{stem}.svg',width,height

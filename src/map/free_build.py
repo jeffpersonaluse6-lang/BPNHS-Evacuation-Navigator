@@ -1,4 +1,4 @@
-"""Free-building bounds and read-only alignment targets in the editor."""
+"""Free-building bounds and alignment targets."""
 
 from dataclasses import replace
 from drafting.models import DraftItem,railing_profile

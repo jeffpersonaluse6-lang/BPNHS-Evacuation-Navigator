@@ -1,4 +1,4 @@
-"""Shared placement models and an empty default canvas; no editor UI."""
+"""Building placement models — no editor UI."""
 
 from dataclasses import dataclass
 import math
@@ -7,7 +7,7 @@ from navigation.models import Rect
 CAMPUS_WIDTH = 3000
 CAMPUS_HEIGHT = 1200
 
-# Image paths are relative to src/assets; do not add another "assets/" prefix.
+# Paths relative to src/assets — don't prefix with "assets/" again.
 ACADEMIC_FLOORPLAN_ASSET = (
     "BPNHS MAP/ACADEMIC-BUILDING SHS/FixGroundFloor.png"
 )
@@ -15,7 +15,7 @@ ACADEMIC_FLOORPLAN_ASSET = (
 
 @dataclass(frozen=True)
 class PlacedBuilding:
-    """Editable placement for either a floor-plan image or a building block."""
+    """A building placement — either a floor-plan image or a solid block."""
 
     label: str
     left: float

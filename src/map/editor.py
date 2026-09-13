@@ -1,4 +1,4 @@
-"""Standalone map editing; leaves the navigation app's placements unchanged."""
+"""Standalone campus placement editor — doesn't touch navigation data."""
 
 from dataclasses import replace
 import math
@@ -71,8 +71,8 @@ class CampusPlacementEditor:
     def build_content(self):
         canvas = self.map_builder(placements=self.placements, **self.layer_options)
         self.map_canvas = canvas
-        # A single stationary gesture surface avoids moving/vertically flipped
-        # image controls changing the coordinate system during the same drag.
+        # Keep one stationary gesture surface so flipped/moved images
+        # don't shift coordinates mid-drag.
         self.building_controls = canvas.controls[-len(self.placements):] if self.placements else []
         self.outline = ft.Container(
             visible=False, border=ft.Border.all(2, "#155EEF"),
@@ -100,7 +100,7 @@ class CampusPlacementEditor:
             self.viewer.update()
 
     def building_at(self, x, y):
-        # Last drawn building wins where placement rectangles overlap.
+        # Top-most building wins on overlap.
         return next((i for i in range(len(self.placements) - 1, -1, -1)
                      if self.placements[i].area.contains(x, y)), None)
 
@@ -153,7 +153,7 @@ class CampusPlacementEditor:
     def start_drag(self, event):
         if not self.move_switch.value:
             return
-        # Finalize a previous gesture if a cancellation/end packet was missed.
+        # Clean up a missed cancellation/end event.
         self.end_drag()
         point = event.local_position
         handle = hit_resize_handle(self.placements[self.selected], point.x, point.y) if self.selected is not None else None
@@ -188,7 +188,7 @@ class CampusPlacementEditor:
             self.update_coordinates()
             self.page.update()
             return
-        # These are already map-space positions. Never divide by screen zoom.
+        # Already in map space — don't divide by screen zoom.
         left = round(max(0, min(self.width - b.width, point.x - self.grab_offset[0])), 1)
         top = round(max(0, min(self.height - b.height, point.y - self.grab_offset[1])), 1)
         self.placements[index] = replace(b, left=left, top=top)
@@ -311,7 +311,7 @@ class CampusPlacementEditor:
 
         def offset(position, size, limit):
             moved = max(0, min(limit - size, position + 24))
-            # At the right/bottom edge, offset inward rather than stacking exactly.
+            # Nudge inward at the right/bottom edge instead of stacking.
             return round(moved if moved != position else max(0, position - 24), 1)
 
         copy = replace(source, label=label,

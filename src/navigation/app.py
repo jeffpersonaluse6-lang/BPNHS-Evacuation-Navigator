@@ -1,4 +1,4 @@
-"""Application controller for the BPNHS evacuation-navigation prototype."""
+"""Main app controller for the evacuation navigator."""
 
 import asyncio
 import math
@@ -26,7 +26,7 @@ MOVEMENT_SPEED = 300
 
 
 class EvacuationApp:
-    """Coordinates map display, manual movement, building entry, and floors."""
+    """Ties together the map, movement, building entry, and floor switching."""
 
     def __init__(self, page: ft.Page, scene=None, player_settings=None):
         self.page = page
@@ -66,7 +66,7 @@ class EvacuationApp:
         self.page.theme_mode = ft.ThemeMode.LIGHT
 
     def render(self):
-        """Mount once; all building floors stay on the same retained world canvas."""
+        """Build the world canvas once; floors update without a full rebuild."""
         if self.viewer is not None:
             self._update_world()
             return
@@ -231,8 +231,8 @@ class EvacuationApp:
         self.state.player_size=settings.visual_size
         self.state.collision_radius=settings.collision_radius
         self.player_size_slider.value=settings.visual_size
-        # Do not teleport on resize, including when a larger circle overlaps a
-        # wall. The accurate new collision is used by the very next move.
+        # Don't teleport on resize — even if the bigger circle overlaps a wall,
+        # the next move will use the accurate new collision.
         self._update_world();self.player_size_slider.update()
 
     def select_player(self,event=None):
@@ -246,7 +246,7 @@ class EvacuationApp:
     def stop_camera_follow(self):self.follow_active=False
 
     def toggle_move_mode(self, event):
-        """Switch between map exploration and joystick movement."""
+        """Toggle between map gestures and joystick movement."""
         self.state.move_mode = not self.state.move_mode
         self.follow_active=True
         if self.viewer is not None:
@@ -274,12 +274,12 @@ class EvacuationApp:
         self.page.update()
 
     def set_joystick_direction(self, x: float, y: float):
-        """Receive the currently held joystick direction, from -1.0 to 1.0."""
+        """Update from the joystick's current direction (-1 to 1)."""
         self.state.joystick_x = x
         self.state.joystick_y = y
 
     async def _movement_loop(self):
-        """Move while the joystick is held, instead of only on drag events."""
+        """Tick the movement loop while the joystick is held down."""
         previous=time.perf_counter()
         while self.active:
             await asyncio.sleep(MOVEMENT_TICK_SECONDS)
@@ -292,8 +292,8 @@ class EvacuationApp:
         if not self.active or not self.viewer or dt<=0 or (not self.state.move_mode and not self.follow_active):return
         before=self._marker_center()
         visible=self.viewer.camera.visible(before,self.state.player_size)
-        # After looking elsewhere manually, bring the camera back smoothly
-        # before allowing the player to walk out of that unseen location.
+        # Smoothly bring the camera back after the user panned away manually,
+        # before the player walks out of view.
         if visible and self.state.move_mode:
             dx=self.state.joystick_x*MOVEMENT_SPEED*dt
             dy=self.state.joystick_y*MOVEMENT_SPEED*dt
@@ -306,7 +306,7 @@ class EvacuationApp:
                 self.follow_active=False
 
     def move_user(self, delta_x: float, delta_y: float) -> bool:
-        """Move the user once from the virtual joystick and check map triggers."""
+        """Move the player one step and check for building/floor triggers."""
         if not self.state.move_mode:
             return False
 
@@ -351,7 +351,7 @@ class EvacuationApp:
         )
 
     def _ensure_free_spawn(self):
-        """New barriers must not trap the player inside their collision geometry."""
+        """Make sure the spawn point isn't stuck inside a wall."""
         width,height=self._map_dimensions()
         radius=self.state.collision_radius
         spawn=find_free_position(*self._marker_center(),radius,
@@ -359,7 +359,7 @@ class EvacuationApp:
         if spawn is not None and not self.navigator.allowed(spawn):
             original=spawn
             spawn=None
-            # Spawn recovery only occurs at startup, never on building/floor entry.
+            # Only search for a free spot at startup, not on floor transitions.
             for ring in range(1,101):
                 offsets=[(n*8,edge*ring*8) for n in range(-ring,ring+1) for edge in (-1,1)]
                 offsets += [(edge*ring*8,n*8) for n in range(-ring,ring+1) for edge in (-1,1)]
@@ -390,7 +390,7 @@ class EvacuationApp:
         return self._check_building_entry()
 
     def _stop_joystick(self):
-        """Clear movement before replacing a view that owns a joystick control."""
+        """Stop movement before tearing down a view that owns the joystick."""
         self.state.joystick_x = 0
         self.state.joystick_y = 0
         if self.joystick is not None:
@@ -409,5 +409,5 @@ class EvacuationApp:
         return self.scene.floors.get(scope_key(parent,f"Floor {self.state.floor}"),[]) if parent else []
 
 def main(page: ft.Page):
-    """Flet entry function imported by main.py."""
+    """Flet entry point — called from main.py."""
     EvacuationApp(page)

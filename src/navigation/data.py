@@ -1,4 +1,4 @@
-"""Map measurements and building data for the BPNHS prototype."""
+"""Floor dimensions and building definitions."""
 
 from .models import Building, Rect
 from map.layers import ACADEMIC_LAYERS, JHS_LAYERS, JHS_B_LAYERS, TVL_A_LAYERS
@@ -7,13 +7,12 @@ from map.layers import ACADEMIC_LAYERS, JHS_LAYERS, JHS_B_LAYERS, TVL_A_LAYERS
 FLOOR_WIDTH = 1436
 FLOOR_HEIGHT = 751
 MARKER_SIZE = 52
-# Legacy position encoding only; collision now uses NavigationState.collision_radius.
-# The visible blue dot has its own configurable diameter.
+# Legacy size constant; collision uses collision_radius instead.
 DEFAULT_PLAYER_SIZE = 20
 
 
 def floor_frame(parent):
-    """Image buildings keep the legacy frame; free builds use their saved frame."""
+    """Image buildings use the legacy frame; free builds use their own."""
     return (parent.floor_width or FLOOR_WIDTH,parent.floor_height or FLOOR_HEIGHT)
 
 
@@ -23,8 +22,7 @@ def floor_scale(parent):
     return parent.width/width,parent.height/height
 
 
-# These values belong to the temporary campus layout. Replace them with values
-# measured from the final campus map once the routes have been verified.
+# Temporary campus layout — update these once the final routes are verified.
 BUILDINGS = {
     "TVL Building B": Building(
         name="TVL Building B",
@@ -56,5 +54,5 @@ BUILDINGS = {
 
 
 def building_for(name: str | None) -> Building | None:
-    """Return the selected building, if one is open."""
+    """Look up a building by name."""
     return BUILDINGS.get(name) if name else None

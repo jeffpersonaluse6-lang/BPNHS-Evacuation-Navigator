@@ -1,4 +1,4 @@
-"""Shared building/floor image rendering without any editor imports or controls."""
+"""Building/floor image rendering — no editor imports."""
 
 import math
 import flet as ft
@@ -10,7 +10,7 @@ def building_control(
 ) -> ft.Control:
     control=_unrotated_building_control(building,show_coordinates=show_coordinates,**layers)
     if building.mirrored:
-        # Wrap instead of overwriting TVL B's existing vertical reflection.
+        # Flip instead of overwriting TVL B's existing vertical reflection.
         control.left=control.top=0
         control=ft.Stack(left=building.left,top=building.top,width=building.width,height=building.height,
             scale=ft.Scale(scale_x=-1,scale_y=1,alignment=ft.Alignment.CENTER),controls=[control])
@@ -41,7 +41,7 @@ def _unrotated_building_control(
         layers.top = building.top
         return layers
     if building.image_src:
-        # Render the original asset directly, with no roof, color, or label over it.
+        # Render the raw asset — no roof, color, or label overlay.
         return ft.Image(
             src=building.image_src,
             left=building.left,

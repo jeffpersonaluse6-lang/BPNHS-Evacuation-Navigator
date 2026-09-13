@@ -1,4 +1,4 @@
-"""Editor-only preview controls; never imported by the normal application."""
+"""Editor-only evacuation preview — not imported by the main app."""
 
 import flet as ft
 import flet.canvas as cv

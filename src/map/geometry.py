@@ -1,4 +1,4 @@
-"""Map-space resize handles; independent of camera zoom and image layering."""
+"""Resize handles in map space."""
 
 from dataclasses import replace
 from math import hypot

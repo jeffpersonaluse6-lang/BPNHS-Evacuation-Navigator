@@ -1,4 +1,4 @@
-"""User-facing BPNHS app launcher. Development tools have separate entry points."""
+"""Normal user entry point — navigation only, no editor tools."""
 
 from pathlib import Path
 

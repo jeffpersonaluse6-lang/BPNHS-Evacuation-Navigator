@@ -1,4 +1,4 @@
-"""Editor canvas sizing without moving, scaling, or removing map content."""
+"""Resize the editor canvas without moving placed objects."""
 
 import math
 from .free_build import item_corners

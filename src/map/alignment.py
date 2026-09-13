@@ -1,4 +1,4 @@
-"""Editor-only, screen-distance snapping against floor-axis bounds."""
+"""Editor snap guides — screen-distance alignment against floor axes."""
 
 from dataclasses import dataclass, replace
 from functools import lru_cache
@@ -72,7 +72,7 @@ def spacing_targets(box, targets, axis):
         gap = right[axis][0] - left[axis][1]
         if gap < 0:
             continue
-        # Equal gaps before / after this pair, or in between the pair.
+        # Equal gaps before/after, or in between the pair.
         yield right[axis][1] + gap, gap, left, right, "after"
         yield left[axis][0] - gap - width, gap, left, right, "before"
         if gap >= width:
@@ -101,7 +101,7 @@ def snap_transform(point, make_item, others, dimensions, *, pixels=6,
     for axis in (0, 1):
         box = bounds(current)
         values = anchors(box, axis)
-        # Changes in each bound when the pointer changes along either floor axis.
+        # How each bound moves when the pointer shifts along either axis.
         derivatives = []
         denominators = []
         for feature in range(3):
@@ -117,7 +117,7 @@ def snap_transform(point, make_item, others, dimensions, *, pixels=6,
         def candidate(feature, target, label, target_box=None, gaps=()):
             nonlocal best
             gradient = derivatives[feature]
-            # Minimum screen-distance correction satisfying gradient dot delta = error.
+            # Smallest screen-distance correction: gradient dot delta = error.
             denom = denominators[feature]
             if denom < 1e-10:
                 return
@@ -163,13 +163,13 @@ def snap_transform(point, make_item, others, dimensions, *, pixels=6,
             if best is None or distance < best[0] - 1e-9:
                 best = (distance, tuple(delta), None)
         if best is not None:
-            # Smart ties take precedence over grid; no grid quantization afterwards.
+            # Smart guides win over grid — no grid after this.
             _, delta, guide = best
             raw = tuple(raw[a] + delta[a] for a in (0, 1))
             current = make_item(raw)
             if guide:
                 guides.append(guide)
-    # A rotated resize may change the first axis while snapping the second.
+    # Rotated resize can change one axis while snapping the other.
     final_box = bounds(current)
     guides = [g for g in guides if min(abs(v - g.position) for v in anchors(final_box, g.axis)) < 1e-4]
     return current, guides

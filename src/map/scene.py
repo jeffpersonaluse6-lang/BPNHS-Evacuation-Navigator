@@ -1,4 +1,4 @@
-"""One editable scene: campus objects and building-local floor objects."""
+"""Editable scene: campus objects plus per-building floor items."""
 
 from dataclasses import replace
 import json
@@ -96,8 +96,8 @@ class MapScene(DraftDocument):
         if CAMPUS not in loaded.floors: raise ValueError("Missing campus layer")
         scene=cls()
         scene.name,scene.width,scene.height,scene.floors=loaded.snapshot()
-        # No arbitrary floor-count limit: stored layers bound work to actual file data.
-        # Legacy maps may omit empty layers for up to their old 12-floor limit.
+        # Stored layers bound work to actual data, not an arbitrary limit.
+        # Legacy maps may have up to 12 empty layers from the old limit.
         for building in scene.buildings():
             numbers={int(key.split()[-1]) for key in scene.floors
                 if key.startswith(f"{building.id}:Floor ") and key.split()[-1].isdigit()}

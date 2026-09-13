@@ -1,4 +1,4 @@
-"""Retained runtime layers: entering/stairs update opacity, never rebuild a scene."""
+"""Runtime layers — floor/stair opacity updates without scene rebuilds."""
 
 import flet as ft
 import flet.canvas as cv

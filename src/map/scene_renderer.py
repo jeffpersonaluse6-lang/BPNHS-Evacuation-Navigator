@@ -1,4 +1,4 @@
-"""Raster building layers and editable vectors share one map coordinate system."""
+"""Raster building layers and editable vectors in one coordinate system."""
 
 from dataclasses import replace
 from functools import lru_cache
@@ -55,7 +55,7 @@ def item_shapes(item,parent=None,collisions=False,openings=()):
                 shapes.append(path_shape(points,primitive["color"],primitive["stroke"]*scale,closed=primitive["closed"]))
     if item.kind in WALL_KINDS and item.stroke:
         for section in wall_sections(item,openings):
-            # Project the wall's full thickness, including nonuniform building resizing.
+            # Project full wall thickness including non-uniform building scale.
             shapes.append(path_shape([project(parent,*p) for p in wall_polygon(section)],item.color,fill=True,closed=True))
     if collisions:
         for barrier in barriers_for_item(item,openings):
@@ -149,7 +149,7 @@ def render_scene(scene,scope=CAMPUS,collisions=False,grid=True,spacing=20,
         if cached is None:
             canvas=cv.Canvas(width=scene.width,height=scene.height)
         else: canvas=cached[1]
-        # Geometry stays valid when only the campus canvas dimensions change.
+        # Canvas size changed but the geometry is still valid.
         canvas.width,canvas.height=scene.width,scene.height
         if cached is None or cached[0]!=signature:
             canvas.shapes=list(item_shapes(item,owner,collisions,openings))
@@ -180,9 +180,9 @@ def render_scene(scene,scope=CAMPUS,collisions=False,grid=True,spacing=20,
                 else:cached=(signature,building_image(item,layer,show_coordinates))
                 image_cache[item.id]=cached
             controls.append(cached[1])
-        # Optional caller-owned overlays; the runtime never supplies editor references.
+        # Optional overlays from the caller; the runtime never supplies editor refs.
         if parent and item.id==parent.id: controls.extend(floor_underlay)
-        # Show edited roof elements on the campus; active floor objects replace them.
+        # Show edited roofs on campus; active floor objects replace them.
         visible_scopes=([scope] if parent and parent.id==item.id else
             [scope_key(item,"Floor 1"),scope_key(item,"Roof")] if item.free_build else [scope_key(item,"Roof")])
         for visible_scope in visible_scopes:

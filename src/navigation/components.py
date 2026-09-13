@@ -1,4 +1,4 @@
-"""Reusable Flet controls for maps, buildings, the user, and the joystick."""
+"""Flet controls for maps, buildings, the player marker, and joystick."""
 
 from collections.abc import Callable
 from math import hypot
@@ -14,7 +14,7 @@ from .models import Building
 
 
 def user_marker(left: float, top: float, size: float = DEFAULT_PLAYER_SIZE) -> ft.Container:
-    """The visible person marker. It is moved only by the virtual joystick."""
+    """The blue dot the player controls."""
     return ft.Container(
         left=left,
         top=top,
@@ -34,7 +34,7 @@ def floor_canvas(
     overlay_shapes=None,
     floorplan_control=None,
 ) -> ft.Stack:
-    """Display a floor-plan image, the user marker, and optional stair guidance."""
+    """A floor-plan image with the player marker and optional stair highlight."""
     controls: list[ft.Control] = [
         ft.Image(
             src=building.floor_assets[floor],
@@ -77,7 +77,7 @@ def floor_canvas(
 
 
 class VirtualJoystick:
-    """A touch/mouse joystick that continuously reports a direction vector."""
+    """Virtual joystick that reports a direction vector while held."""
 
     BASE_SIZE = 148
     KNOB_SIZE = 56
@@ -132,7 +132,7 @@ class VirtualJoystick:
 
     @property
     def control(self) -> ft.Container:
-        """The panel placed above the map, so it does not pan with the map."""
+        """The joystick panel, fixed above the map so it doesn't pan."""
         return ft.Container(
             width=180,
             padding=10,
@@ -161,7 +161,7 @@ class VirtualJoystick:
         self.base.update()
 
     def deactivate(self):
-        """Stop safely before this control is removed during a map transition."""
+        """Kill movement before this control is removed."""
         self.enabled = False
         self._send_direction(0, 0)
 

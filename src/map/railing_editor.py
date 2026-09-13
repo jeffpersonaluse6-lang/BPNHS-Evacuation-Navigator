@@ -1,4 +1,4 @@
-"""Live railing thickness editing, with one undo entry per slider gesture."""
+"""Railing thickness slider with one undo per gesture."""
 
 from dataclasses import replace
 import flet as ft

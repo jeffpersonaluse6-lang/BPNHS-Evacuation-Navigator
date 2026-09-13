@@ -1,4 +1,4 @@
-"""Editor-only multi-selection, structural relationships and bundle operations."""
+"""Multi-select, group relationships, and bundle ops — editor only."""
 
 from dataclasses import replace
 import math
@@ -63,7 +63,7 @@ def related(items,ids,ancestors=False,*,structures=False):
             if (structures and item.parent_id in ids) or (item.group_id and item.group_id in groups):
                 ids.add(item.id)
             if item.id in ids or item.kind in {"building","entry_zone"}: continue
-            # A room selection carries furniture, stair and railing pieces inside it.
+            # A room selection includes its furniture, stairs, and railings.
             for room in rooms:
                 points=[item.local_to_world(*p) for p in
                         ((0,0),(item.width,0),(item.width,item.height),(0,item.height))]

@@ -1,4 +1,4 @@
-"""Runnable CAD-style floor-plan drafter; also opens from the campus editor."""
+"""Floor-plan drafting editor — standalone or opened from the campus editor."""
 
 from dataclasses import replace
 import math
@@ -125,7 +125,7 @@ class BuildingDraftEditor:
         y=max(0,min(self.document.height,p.y))
         if snap and self.snap.value:
             step=int(self.spacing.value)
-            # Stable half-up snapping, including rotated floating-point points.
+            # Half-up rounding for stable grid snapping with rotated points.
             x,y=(math.floor(x/step+.5+1e-9)*step,
                  math.floor(y/step+.5+1e-9)*step)
             x=max(0,min(self.document.width,x))
@@ -174,7 +174,7 @@ class BuildingDraftEditor:
         kind=self.add_kind
         w,h=STAMP_SIZES.get(kind,{'room':(320,240),'rectangle':(180,120),
             'ellipse':(140,100),'wall':(240,0),'line':(180,0)}.get(kind,(120,80)))
-        # Reset the view so an automatically placed object is immediately visible.
+        # Reset view so new objects appear on screen immediately.
         offset=(len(self.items())%6)*20
         item=self.create_item(kind,120+offset,120+offset,w,h)
         before=self.document.snapshot()
@@ -263,8 +263,7 @@ class BuildingDraftEditor:
             self.preview=self.create_item(self.tool,ox,oy,dx,dy)
         elif self.tool not in {"select","pan"}:
             self.preview=self.create_item(self.tool,min(x,ox),min(y,oy),max(1,abs(x-ox)),max(1,abs(y-oy)))
-        # Only update drawing/status during motion; keep text fields stable and
-        # reuse cached geometry for every unchanged object.
+        # Only redraw shapes and status during drag; keep text fields stable.
         self.canvas.shapes=drawing_shapes(self.document,self.floor,self.grid.value,int(self.spacing.value),self.selected,self.preview)
         self.page.update()
 
@@ -444,7 +443,7 @@ class BuildingDraftEditor:
             path=await self.picker.save_file(dialog_title="Save editable building draft",file_name=self.file_name("json"),
                 file_type=ft.FilePickerFileType.CUSTOM,allowed_extensions=["json"],src_bytes=saved.encode("utf-8"))
             if path:
-                # Don't mark concurrent edits as saved while the picker was open.
+                # Don't mark as saved if the user edited while the picker was open.
                 if self.document.to_json()==saved: self.document.dirty=False
                 self.status.value=f"Draft saved: {path}"
             self.refresh()
@@ -508,7 +507,7 @@ class BuildingDraftEditor:
         self.exporting=True
         self.control.disabled=True
         try:
-            # Capture only object shapes: no grid, selection or white canvas backdrop.
+            # Capture shapes only — no grid, selection, or canvas background.
             await self.canvas.clear_capture()
             self.canvas.shapes=drawing_shapes(self.document,self.floor,grid=False)
             self.page.update()

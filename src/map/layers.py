@@ -1,4 +1,4 @@
-"""Actual building images, ordered bottom-to-top in a shared map footprint."""
+"""Building floor images stacked bottom-to-top in a shared footprint."""
 
 from dataclasses import dataclass
 
@@ -15,8 +15,8 @@ ACADEMIC_LAYERS = (
 ACADEMIC_ROOF = f"{ASSET_FOLDER}/roofblue.jpg"
 LAYER_NAMES = tuple(name for name, _ in ACADEMIC_LAYERS) + ("Roof",)
 
-# Original pixel dimensions and measured outer-wall bounds (not alpha bounds:
-# some PNGs have stray white pixels outside the building). No assets are edited.
+# Pixel dimensions and measured outer-wall bounds (not alpha bounds —
+# some PNGs have stray white pixels outside the building). Assets aren't edited.
 FLOOR_IMAGE_BOUNDS = {
     "Ground Floor": ((1658, 949), (57, 53, 1600, 879)),
     "Floor 2": ((1735, 907), (57, 13, 1673, 872)),
@@ -24,11 +24,11 @@ FLOOR_IMAGE_BOUNDS = {
     "Floor 4": ((1654, 951), (33, 23, 1630, 868)),
 }
 
-# Preserve the ground floor's existing footprint within the placement rectangle.
+# Keep the ground floor footprint within the placement rectangle.
 FLOOR_FOOTPRINT = (57 / 1658, 53 / 949, 1543 / 1658, 826 / 949)
 
-# One rectangular roof: left, top, width, height as placement fractions.
-# Keep the same left edge so half the fire-exit stairs remains exposed.
+# Rectangular roof as placement fractions. Same left edge so half the
+# fire-exit stairs stay exposed.
 ROOF_FOOTPRINT = (0.0835, 0.0558, 0.8815, 0.8707)
 
 JHS_ASSET_FOLDER = "BPNHS MAP/JHS BUILDING A"
@@ -45,7 +45,7 @@ JHS_IMAGE_BOUNDS = {
     "Floor 4": ((1654, 951), (33, 24, 1628, 868)),
 }
 JHS_FOOTPRINT = (69 / 1658, 52 / 949, 1527 / 1658, 822 / 949)
-# Mirrored building: its fire exit is on the right, so stop at its midpoint.
+# Mirrored building — fire exit is on the right, so stop at midpoint.
 JHS_ROOF_FOOTPRINT = (69 / 1658, 52 / 949, 1450 / 1658, 822 / 949)
 
 JHS_B_ASSET_FOLDER = "BPNHS MAP/JHS BUILDING B"
@@ -53,7 +53,7 @@ JHS_B_LAYERS = (
     ("Ground Floor", f"{JHS_B_ASSET_FOLDER}/GroundFloorB.png"),
     ("Floor 2", f"{JHS_B_ASSET_FOLDER}/Floor2B.png"),
 )
-# Register the main building walls, not the exterior ground-floor step edges.
+# Use the main building walls, not the exterior ground-floor step edges.
 JHS_B_IMAGE_BOUNDS = {
     "Ground Floor": ((1854, 848), (5, 9, 1841, 746)),
     "Floor 2": ((1895, 830), (7, 10, 1878, 732)),
@@ -76,7 +76,7 @@ JHS_C_ASSET_FOLDER = "BPNHS MAP/JHS BUILDING C"
 JHS_C_LAYERS = (
     ("Ground Floor", f"{JHS_C_ASSET_FOLDER}/JHS BUILDING C.png"),
 )
-# Clip the exterior PNG margins at render time; leave the asset unchanged.
+# Clip exterior PNG margins at render time — don't edit the asset.
 JHS_C_IMAGE_BOUNDS = {
     "Ground Floor": ((887, 1774), (131, 14, 758, 1748)),
 }
@@ -221,7 +221,7 @@ def build_building_layers(
     controls.append(_roof_control(style, width, height, top_layer == "Roof"))
     stack = ft.Stack(width=width, height=height, controls=controls)
     if style.flip_vertical:
-        # Reflect top-to-bottom; preserve the left/right stair locations.
+        # Flip top-to-bottom; keep the left/right stair positions.
         stack.scale = ft.Scale(scale_x=1, scale_y=-1, alignment=ft.Alignment.CENTER)
     return stack
 

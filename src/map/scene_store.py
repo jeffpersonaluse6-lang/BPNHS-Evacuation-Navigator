@@ -1,4 +1,4 @@
-"""Shared map storage; saving is explicit, atomic, and never edits image assets."""
+"""Save/load the map workspace — atomic writes, no asset edits."""
 
 from pathlib import Path
 import os
@@ -19,7 +19,7 @@ def load_scene(path=SCENE_FILE):
 def save_scene(scene,path=SCENE_FILE):
     path=Path(path)
     data=scene.to_json()
-    # Validate before replacing the last successfully saved workspace.
+    # Validate first so a bad file doesn't overwrite the last good save.
     MapScene.from_json(data)
     path.parent.mkdir(parents=True,exist_ok=True)
     temporary=None

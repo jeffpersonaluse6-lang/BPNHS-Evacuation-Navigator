@@ -1,4 +1,4 @@
-"""Editable floor-plan geometry, history, JSON persistence and SVG export."""
+"""Floor-plan data model with undo, JSON save/load, and SVG export."""
 
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
@@ -42,7 +42,7 @@ class DraftItem:
     completed_floors: tuple = ()
     approach_distance: float = 80
     fade_when_obstructing: bool = True
-    # Optional native floor frame. Free builds retain their authored map X/Y.
+    # Custom floor frame — free builds keep their original X/Y.
     floor_width: float | None = None
     floor_height: float | None = None
     floor_origin_x: float = 0
@@ -53,7 +53,7 @@ class DraftItem:
     activator_stair: str | None = None
     activator_axis: str = "auto"
     activator_enabled: bool = True
-    # Full physical width in native drawing units; None retains legacy defaults.
+    # Physical collision width; None uses legacy defaults.
     collision_thickness: float | None = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
@@ -82,7 +82,7 @@ class DraftItem:
 
 
 def railing_profile(stroke):
-    """Rail spacing, visible strokes, and the legacy/default collision envelope."""
+    """Rail spacing, strokes, and collision envelope."""
     gap=max(2,min(8,stroke/2))
     rails=max(2,stroke*.4)
     posts=max(2.5,stroke*.5)
@@ -91,7 +91,7 @@ def railing_profile(stroke):
 
 
 def primitives(item):
-    """Shared local-space drawing primitives for canvas and vector export."""
+    """Local-space drawing shapes for canvas and SVG."""
     w, h = item.width, item.height
     result = []
 
@@ -149,7 +149,7 @@ def primitives(item):
     elif item.kind in {"stairs", "double_stairs"}:
         box(0,0,w,h,"#FFFFFF")
         landing = min(24,h/5) if item.kind == "double_stairs" else 0
-        # Individual tread shading, retaining all original outlines and the landing.
+        # Shade each tread individually, keeping outlines and landing intact.
         sections = [(0,w,item.stair_direction)] if not landing else [
             (0,w/2-3,item.stair_direction),(w/2+3,w/2-3,item.stair_right_direction)]
         for x,sw,direction in sections:
@@ -259,8 +259,7 @@ class DraftDocument:
         return deepcopy((self.name,self.width,self.height,self.floors))
 
     def remember(self, previous):
-        # The previous snapshot is already isolated. Comparing against live data
-        # is read-only; copying every unchanged object again on release adds lag.
+        # Don't re-copy unchanged objects — it's slow and the snapshot is already isolated.
         if previous != (self.name,self.width,self.height,self.floors):
             self.undo_stack.append(previous)
             self.undo_stack = self.undo_stack[-100:]
@@ -328,7 +327,7 @@ class DraftDocument:
         return doc
 
     def svg(self,floor):
-        """No grid or exterior background; room interiors retain their fill."""
+        """SVG without grid or background; room fills kept."""
         result=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.width:g}" height="{self.height:g}" viewBox="0 0 {self.width:g} {self.height:g}">']
         for item in self.floors[floor]:
             for primitive in primitives(item):

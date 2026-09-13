@@ -1,4 +1,4 @@
-"""Large draggable drafting window above the campus editor."""
+"""Floating drafting window that sits above the campus editor."""
 import flet as ft
 import inspect
 

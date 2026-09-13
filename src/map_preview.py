@@ -1,4 +1,4 @@
-"""Older map-editor launcher; map_editor.py is the explicit development entry point."""
+"""Older editor launcher — map_editor.py is the main one now."""
 
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-"""Floor Activator inspector and editor-only zone graphics."""
+"""Floor activator inspector and zone graphics."""
 
 from dataclasses import replace
 import math

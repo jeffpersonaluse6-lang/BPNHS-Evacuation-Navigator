@@ -1,11 +1,11 @@
-"""Data models used by the navigation prototype."""
+"""Navigation state and data models."""
 
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class Rect:
-    """A rectangular area in a map's coordinate system."""
+    """A rectangle in map coordinates."""
 
     left: float
     top: float
@@ -21,7 +21,7 @@ class Rect:
 
 @dataclass(frozen=True)
 class Building:
-    """Indoor floor images and the stair trigger area for one building."""
+    """Floor images and stair trigger area for a building."""
 
     name: str
     stair_area: Rect
@@ -31,7 +31,7 @@ class Building:
 
 @dataclass
 class NavigationState:
-    """Small, UI-independent state for the manual demo."""
+    """Runtime state for the evacuation demo."""
 
     view: str = "campus"
     building_name: str | None = None

@@ -1,4 +1,4 @@
-"""Free-build floors over the entire locked campus; fit bounds only on save."""
+"""Free-build floor editor — fit bounds on save only."""
 
 from dataclasses import replace
 import math
@@ -21,7 +21,7 @@ class BuildingEditor(MapWorkspaceEditor):
         self.alignment_reference_cache={}
         working=MapScene.from_json(owner.document.to_json())
         if parent is None:
-            # Internal ownership/frame metadata only: never a visible/selectable box.
+            # Internal metadata only — not a visible/selectable box.
             parent=owner.create_item("building",0,0,working.width,working.height)
             parent=replace(parent,floor_count=1,fill="none",free_build=True,
                 floor_width=working.width,floor_height=working.height)
@@ -47,7 +47,7 @@ class BuildingEditor(MapWorkspaceEditor):
             ft.Button("Remove current floor",on_click=self.remove_floor),
             self.commit_button,ft.Button("Cancel",on_click=self.cancel)])
         self.control.controls.insert(2,self.floor_panel)
-        # No nested building sessions or old SVG/footprint workflow in this workspace.
+        # No nested building sessions or old SVG workflow here.
         self.control.controls[1].controls=[c for c in self.control.controls[1].controls
             if c is not self.building_actions and getattr(c,"content",None) not in ("Edit Building","Edit selected draft")]
         self.tool_buttons["building"].content="Free build"
@@ -75,7 +75,7 @@ class BuildingEditor(MapWorkspaceEditor):
 
     def point(self,event,snap=True):
         if not getattr(self,"ready",False): return super().point(event,snap)
-        # Clamp to the actual map, not the legacy/native building rectangle.
+        # Clamp to the map bounds, not the legacy building rectangle.
         x=max(0,min(self.document.width,event.local_position.x))
         y=max(0,min(self.document.height,event.local_position.y))
         x,y=self.unproject_point(x,y)
@@ -154,7 +154,7 @@ class BuildingEditor(MapWorkspaceEditor):
         previous=self.map_reference.content.controls
         if len(previous)!=len(background) or any(a is not b for a,b in zip(previous,background)):
             self.map_reference.content.controls=background
-        # Background/grid first, reference map next, then the current building.
+        # Draw background/grid, then reference map, then current building.
         split=2 if self.grid.value else 1
         return [*foreground[:split],self.map_reference,*foreground[split:]]
 
@@ -261,7 +261,7 @@ class BuildingEditor(MapWorkspaceEditor):
         self.status.value=f"Use {self.commit_button.content} to save this building."; self.refresh()
 
     def copy_floor(self,event=None):
-        # The generic drafter's previous layer could be Campus: never copy it.
+        # The generic drafter's layer could be Campus — never copy it.
         if not self.floor.startswith(f"{self.building_id}:Floor ") or int(self.floor.split()[-1])<=1: return
         if self.selection.locked(): return
         from .selection import clone_bundle

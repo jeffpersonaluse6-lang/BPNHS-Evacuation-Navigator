@@ -1,8 +1,7 @@
-"""Development-only map editor launcher and legacy placement-editor compatibility.
+"""Map editor launcher and legacy placement-editor compat.
 
-Run src/map_editor.py (or the older src/map_preview.py) to edit the map.
-Normal users launch src/main.py; it never imports this module.
-Original placement constants now live in map/placements.py.
+Run src/map_editor.py to edit the map.
+Normal users launch src/main.py — it never imports this.
 """
 
 from pathlib import Path

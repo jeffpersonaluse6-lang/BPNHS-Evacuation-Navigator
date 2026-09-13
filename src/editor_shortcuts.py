@@ -1,4 +1,4 @@
-"""Scoped editing shortcuts shared by the map and floating drafting editor."""
+"""Keyboard shortcuts for the map and drafting editors."""
 
 
 def history_shortcut(event):
@@ -13,7 +13,7 @@ def history_shortcut(event):
 
 
 def nudge_shortcut(event):
-    """Arrow labels vary by platform; return movement in active-layer units."""
+    """Arrow keys return movement deltas in layer units."""
     if getattr(event, "alt", False) or getattr(event, "meta", False):
         return None
     key = "".join(event.key.lower().split()).replace("arrow", "")
@@ -25,7 +25,7 @@ def nudge_shortcut(event):
 
 
 class EditorShortcuts:
-    """Restore earlier handlers; leave focused text editing and navigation alone."""
+    """Wraps keyboard events, restoring the previous handler when removed."""
 
     def __init__(self, page, undo, redo, blocked=lambda: False, duplicate=None, nudge=None, actions=None):
         self.page, self.undo, self.redo, self.blocked = page, undo, redo, blocked

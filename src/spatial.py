@@ -1,4 +1,4 @@
-"""Small deterministic bounding-box index shared by geometry and editor tools."""
+"""Simple grid index for bounding-box lookups."""
 
 import math
 
@@ -23,7 +23,7 @@ class BoundsIndex:
     def query(self,box,padding=(0,0)):
         expanded=tuple((box[a][0]-padding[a],box[a][1]+padding[a]) for a in (0,1))
         x0,x1,y0,y1=self.cell_range(expanded)
-        # Bound huge queries by occupied cells rather than iterating empty space.
+        # Skip empty cells for big queries
         candidates=set(self.large)
         if (x1-x0+1)*(y1-y0+1)>max(64,len(self.cells)*2):
             for (x,y),numbers in self.cells.items():

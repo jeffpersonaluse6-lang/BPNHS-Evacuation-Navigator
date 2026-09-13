@@ -1,4 +1,4 @@
-"""Thin wall/room edges with automatic doorway cuts, shared by editor and player."""
+"""Wall/room collision with automatic doorway cuts."""
 
 from dataclasses import dataclass,replace,field
 from functools import lru_cache
@@ -12,7 +12,7 @@ COLLISION_KINDS = WALL_KINDS | {"railing","stairs","double_stairs"}
 
 
 def collision_thickness(item):
-    """Full physical width; legacy objects keep their previous collision shape."""
+    """Collision width — legacy objects use their stroke as-is."""
     if item.collision_thickness is not None:return item.collision_thickness
     if item.kind=="railing":return 2*railing_profile(item.stroke)[3]
     return max(1,item.stroke)
@@ -35,7 +35,7 @@ class Barrier:
             across = abs((x-ax)*dy-(y-ay)*dx)/length
             if player_radius == 0:
                 return 0 < along < length and across < self.radius
-            # Circle against the actual thin rectangle, not a doorway-spanning box.
+            # Test the circle against the actual rectangle, not a spanning box.
             return math.hypot(max(0,-along,along-length),max(0,across-self.radius)) < player_radius-1e-7
         t = max(0,min(1,((x-ax)*dx+(y-ay)*dy)/length2)) if length2 else 0
         return math.hypot(x-ax-t*dx,y-ay-t*dy) < self.radius+player_radius-1e-7
@@ -43,7 +43,7 @@ class Barrier:
 
 @dataclass(frozen=True)
 class PolygonBarrier:
-    """A transformed thick wall; test the world-space player circle against it."""
+    """Transformed thick wall for circle-vs-polygon collision."""
     points: tuple
     bounds: tuple = field(init=False)
 
@@ -65,10 +65,9 @@ class PolygonBarrier:
 
 
 def project_barriers(barriers,project,scales):
-    """Compile authored collision into map units once, not during movement.
+    """Precompute collision geometry once, not every frame.
 
-    Uniform scaling keeps exact capsules. Nonuniform walls use their exact
-    transformed rectangles; rounded rails use a fine capsule outline.
+    Uniform scale keeps exact capsules. Non-uniform walls become polygons.
     """
     sx,sy=scales
     result=[]
@@ -99,12 +98,12 @@ def barrier_bounds(barriers):
 
 
 def openings_for(items):
-    """Only door/opening symbols cut walls; windows and stairs never do."""
+    """Doors and openings cut walls; windows and stairs don't."""
     return tuple(item for item in items if item.kind in OPENING_KINDS)
 
 
 def wall_edges(item,*,collision=False):
-    """Boundary segments only: a Room's interior is never a solid obstacle."""
+    """Wall boundary segments — a room's interior is never solid."""
     if item.kind not in WALL_KINDS:
         return ()
     radius = collision_thickness(item)/2 if collision else max(.5,item.stroke/2)
@@ -112,21 +111,21 @@ def wall_edges(item,*,collision=False):
         local = [((0,0),(item.width,item.height))]
     else:
         w,h = item.width,item.height
-        # Stroke-miter corners extend by half the wall thickness, not a large box.
+        # Miter corners extend by half the stroke, not a bounding box.
         local = [((-radius,0),(w+radius,0)),((w,-radius),(w,h+radius)),
                  ((w+radius,h),(-radius,h)),((0,h+radius),(0,-radius))]
     return tuple((item.local_to_world(*a),item.local_to_world(*b),radius) for a,b in local)
 
 
 def opening_axis(item):
-    """The opening is the door's baseline, not its leaf or large swing arc."""
+    """The door's baseline — not its leaf or swing arc."""
     y = item.height/2 if item.kind == "opening" else item.height
     reach = item.height/2 if item.kind == "opening" else max(8,item.stroke+6)/2
     return item.local_to_world(0,y),item.local_to_world(item.width,y),reach
 
 
 class OpeningIndex:
-    """Only nearby door baselines participate in a wall's cache/collision cuts."""
+    """Index of nearby door baselines for efficient wall-cut lookups."""
     def __init__(self,openings):
         self.openings=tuple(openings)
         boxes=[]
@@ -178,14 +177,14 @@ def solid_sections(start,end,radius,openings):
 
 @lru_cache(maxsize=4096)
 def wall_sections(item,openings=()):
-    """Visible wall strokes and doorway cuts, independent of physical thickness."""
+    """Visible wall sections with doorway gaps cut out."""
     return tuple(section for a,b,r in wall_edges(item) for section in solid_sections(a,b,r,openings))
 
 
 @lru_cache(maxsize=4096)
 def collision_wall_sections(item,openings=()):
-    # Match door baselines to the visible wall, so widening collision cannot
-    # accidentally treat a doorway on a nearby parallel wall as its opening.
+    # Match doors to the visible wall so widening collision doesn't
+    # accidentally cut a doorway on a parallel wall nearby.
     visual_radius=max(.5,item.stroke/2)
     radius=collision_thickness(item)/2
     return tuple(replace(section,radius=radius) for a,b,_ in wall_edges(item,collision=True)
@@ -202,8 +201,8 @@ def barriers_for_item(item,openings=()):
         return (Barrier(item.local_to_world(0,0),item.local_to_world(item.width,item.height),
                         collision_thickness(item)/2),)
     if item.kind in {"stairs","double_stairs"} and item.collision_thickness is not None:
-        # Stair treads stay walkable. Optional barriers constrain the sides and
-        # double-flight divider without placing collision across either end.
+        # Stairs stay walkable on the treads. Optional side barriers keep
+        # the player in the corridor without blocking the ends.
         lines=[((0,0),(0,item.height)),((item.width,0),(item.width,item.height))]
         if item.kind=="double_stairs":
             lines.append(((item.width/2,min(24,item.height/5)),(item.width/2,item.height)))
@@ -219,12 +218,12 @@ def _compiled_barriers(items):
 
 
 def barriers_for(items):
-    # Geometry-derived caching invalidates immediately after move/resize/delete/undo.
+    # Cached by item tuple — invalidates after move/resize/delete/undo.
     return list(_compiled_barriers(tuple(items)))
 
 
 def snap_opening_to_wall(item,items,point,tolerance=20):
-    """Click a wall to align a new opening; moving existing symbols remains free."""
+    """Snap a new opening to the nearest wall when clicking."""
     candidates = []
     for wall in items:
         for a,b,radius in wall_edges(wall):
@@ -249,7 +248,7 @@ def snap_opening_to_wall(item,items,point,tolerance=20):
 
 
 def move_with_collisions(x,y,dx,dy,radius,barriers,width,height):
-    """Substep movement prevents tunnelling; blocked diagonals can slide."""
+    """Move in substeps to avoid tunnelling; slide along blocked diagonals."""
     steps = max(1,math.ceil(math.hypot(dx,dy)/max(1,min(4,radius/2))))
     sx,sy = dx/steps,dy/steps
 
@@ -270,7 +269,7 @@ def move_with_collisions(x,y,dx,dy,radius,barriers,width,height):
 
 
 def find_free_position(x,y,radius,barriers,width,height):
-    """Find a nearby unblocked spawn, or return None if every candidate is blocked."""
+    """Find a free spawn point nearby, or None if everything is blocked."""
     x,y=max(radius,min(width-radius,x)),max(radius,min(height-radius,y))
     if not any(b.blocks(x,y,radius) for b in barriers): return x,y
     step=max(8,radius)

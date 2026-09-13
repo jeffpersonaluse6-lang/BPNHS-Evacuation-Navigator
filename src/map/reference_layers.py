@@ -1,4 +1,4 @@
-"""Ghost floors and their visibility settings belong to the editor only."""
+"""Ghost floor references — editor only."""
 
 from dataclasses import dataclass, replace
 import flet as ft
@@ -43,7 +43,7 @@ def reference_controls(scene, scope, view, cache=None):
         openings = OpeningIndex(openings_for(children))
         for item in children:
             if item.kind=="floor_activator":continue
-            # Outlines, not opaque room interiors, make useful blueprint references.
+            # Outlines work better as blueprint references than opaque room fills.
             ghost = replace(item, fill="none", color="#64748B")
             shapes.extend(item_shapes(ghost, parent, False, openings.for_wall(ghost)))
         layers = []

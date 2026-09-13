@@ -1,4 +1,4 @@
-"""One world position with elevation-aware collision and continuous stair progress."""
+"""Single world position with collision and stair progress tracking."""
 
 from dataclasses import dataclass
 import math
@@ -71,7 +71,7 @@ class WorldNavigator:
         self.travel=None
         self.previous_point=None
         self.locked_zones.clear()
-        self.state.view="floor"  # Context label only; the map/viewer never changes.
+        self.state.view="floor"  # Just a label — the map doesn't actually change.
         self.state.building_name=parent.opens or parent.id
         self.state.floor=1
         self.state.stair_armed=True
@@ -95,11 +95,11 @@ class WorldNavigator:
             p,lateral,raw=progress(zone,local)
             if not lateral or not -1e-7<=raw<=1:continue
             previous=progress(zone,self.previous_point)[2] if self.previous_point is not None else None
-            # Entry from the source end only; spawning/side-entry halfway never changes floors.
+            # Only trigger from the source end — spawning or side-entry doesn't count.
             if previous is None and raw<=1e-7:return zone
             if previous is not None and previous<=1e-7 and raw>previous+1e-9:
-                # Check where the movement segment crossed the source edge, including
-                # small zones that a movement substep crosses by more than 15%.
+            # Did the movement cross the source edge? Handles tiny zones where a
+            # substep covers more than 15% of the zone.
                 fraction=max(0,min(1,-previous/(raw-previous)))
                 crossing=tuple(a+(b-a)*fraction for a,b in zip(self.previous_point,local))
                 if progress(zone,crossing)[1]:return zone
@@ -159,7 +159,7 @@ class WorldNavigator:
             local=self.scene.unproject(scope_key(self.parent,"Floor 1"),*point)
             if self.travel:
                 p,lateral,raw=progress(self.travel.zone,local)
-                # Remain in the authored stair corridor until one end is reached.
+                # Stay in the stair corridor until we reach the end.
                 if not lateral:return False
                 floors=({self.travel.source} if raw<=0 else {self.travel.target} if raw>=1 else
                     {self.travel.source,self.travel.target})

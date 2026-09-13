@@ -1,4 +1,4 @@
-"""Validated player preferences, stored independently from map content."""
+"""Player size/collision settings, saved to disk."""
 
 from dataclasses import dataclass
 import json

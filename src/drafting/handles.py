@@ -1,4 +1,4 @@
-"""Selection handles and anchor-preserving resize/rotation geometry."""
+"""Selection handles and resize/rotation math."""
 from dataclasses import replace
 import math
 

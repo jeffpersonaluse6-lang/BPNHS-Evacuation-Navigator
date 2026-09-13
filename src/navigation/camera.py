@@ -1,4 +1,4 @@
-"""An explicit map transform with frame-independent, bounded camera following."""
+"""Smooth camera with frame-independent following."""
 
 from dataclasses import dataclass
 import math
@@ -34,7 +34,7 @@ class SmoothCamera:
         return margin<=x<=self.width-margin and margin<=y<=self.height-margin
 
     def follow(self,point,dt,*,moving=False,diameter=20,guard=None):
-        """Only translate: preserve zoom, rotation and all authored geometry."""
+        """Only move the camera — don't touch zoom or rotation."""
         if dt<=0:return False
         sx,sy=self.screen(point)
         ex,ey=self.width/2-sx,self.height/2-sy
@@ -45,15 +45,15 @@ class SmoothCamera:
         guard=visible if guard is None else guard
         rate=5 if moving else 7
         if guard:
-            # Catch up sooner near the viewport edge before the safety guard
-            # needs to intervene. Normal movement retains a soft trailing gap.
+            # Speed up near the edge so the safety guard doesn't have to kick in.
+            # Normal movement keeps a soft trailing gap.
             urgency=max(abs(ex)/max(1,limits[0]),abs(ey)/max(1,limits[1]))
             rate+=12*max(0,urgency-.65)**2
         alpha=-math.expm1(-rate*dt)
         self.x+=ex*alpha;self.y+=ey*alpha
         if guard:
-            # A large movement step/window resize must never push a visible
-            # player out of view. An offscreen manual view recenters gradually.
+            # Don't let a big step or resize push the player offscreen.
+            # Manual offscreen views recenter gradually.
             px,py=self.screen(point)
             self.x+=max(-limits[0],min(limits[0],px-self.width/2))-(px-self.width/2)
             self.y+=max(-limits[1],min(limits[1],py-self.height/2))-(py-self.height/2)
@@ -62,10 +62,10 @@ class SmoothCamera:
 
 
 class CameraViewport(ft.GestureDetector):
-    """Retain the world canvas and apply camera transforms to its root only.
+    """Owns the world canvas and applies camera transforms at the root level.
 
-    Owning the transform avoids native viewer inertia/clamping silently changing
-    the camera state. Gestures and following therefore share exact coordinates.
+    Avoids the native viewer silently clamping or adding inertia to the camera.
+    Gestures and following share the same coordinate system.
     """
     def __init__(self,scene,point,*,width=1368,height=710):
         self.camera=SmoothCamera(width,height)
@@ -92,8 +92,8 @@ class CameraViewport(ft.GestureDetector):
 
     def resize(self,event):
         if event.width<=0 or event.height<=0:return
-        # Preserve the current view center on layout changes, including headers
-        # and mobile windows. Use the actual viewport, not guessed page padding.
+        # Keep the view centered when the viewport size changes (e.g. header
+        # toggling, mobile keyboard). Use the real viewport, not guessed padding.
         self.camera.x+=(event.width-self.camera.width)/2
         self.camera.y+=(event.height-self.camera.height)/2
         self.camera.width=event.width;self.camera.height=event.height

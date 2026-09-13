@@ -137,7 +137,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         self.viewer.content=self.gesture
         self.viewer.min_scale=.25
         self.viewer.max_scale=8
-        # No fit-to-viewport minimum secretly overriding the tracked zoom scale.
+        # Don't override the tracked zoom with a viewport-fit minimum.
         self.viewer.boundary_margin=ft.Margin.all(math.inf)
         self.viewer.on_interaction_start=self.view_interaction_start
         self.viewer.on_interaction_update=self.view_interaction_update
@@ -227,8 +227,8 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         return x/sx+parent.floor_origin_x,y/sy+parent.floor_origin_y
 
     def dropdown_options(self,control,entries):
-        # Retain option IDs when only selection/geometry changes. Recreating all
-        # options makes Flet send and compare huge unrelated inspector lists.
+        # Keep option IDs on geometry changes — recreating them sends huge
+        # unrelated lists to Flet for comparison.
         entries=tuple(entries)
         current=control.options
         if tuple((o.key,o.text) for o in current)==entries:return
@@ -489,7 +489,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
                 else: dx=0
             self.preview=self.create_item(self.tool,ox,oy,dx,dy)
             if self.tool=="wall" and self.ortho.value:
-                # Do not show a pointer guide the straight-wall constraint discarded.
+                # Don't show a guide the straight-wall constraint discarded.
                 endpoint=(ox+dx,oy+dy)
                 self.alignment_guides=[g for g in self.alignment_guides if abs(endpoint[g.axis]-g.position)<1e-4]
         elif self.tool not in {"select","pan"}:
@@ -499,7 +499,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
 
     def pointer_up(self,event=None):
         if self.exporting: return
-        # The throttled final move may precede the actual release position.
+        # The throttled final move may arrive before the actual release.
         if self.is_dragging and self.origin is not None and getattr(event,"local_position",None) is not None:
             self.pointer_move(event)
         if self.selection.up(): return
@@ -801,7 +801,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
     def history(self,redo):
         self.cancel_gesture(update=False)
         self.document.redo() if redo else self.document.undo()
-        # Keep selecting the same object after undoing a nudge if it still exists.
+        # Keep the same object selected after undo if it still exists.
         self.name.value=self.document.name
         self.refresh(properties=True)
 
@@ -813,7 +813,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         item=self.selected_item()
         if item is None or not (dx or dy): return
         if self.parent():
-            # A rotated/mirrored building must not reverse the arrow directions.
+            # A rotated/mirrored building shouldn't flip arrow directions.
             world=self.document.project(self.floor,item.x,item.y)
             local=self.document.unproject(self.floor,world[0]+dx,world[1]+dy)
             lx,ly=local[0]-item.x,local[1]-item.y
@@ -843,7 +843,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
                 for key,field in self.properties.items()}
             if item.kind in LINE_KINDS:
                 length=float(self.length.value)
-                # Width/height edits win unless the separate Length field changed.
+                # Width/height wins unless the separate Length field changed.
                 if not math.isclose(length,math.hypot(item.width,item.height),rel_tol=1e-8):
                     if not math.isfinite(length) or length<=0: raise ValueError("Length must be positive")
                     current=math.hypot(values["width"],values["height"]) or 1
@@ -959,7 +959,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             if name.lower()!="roof": number+=1
             layer="Roof" if name.lower()=="roof" else f"Floor {number}"
             if layer!="Roof" and number>parent.floor_count: break
-            # Bake source coordinates to the shared floor canvas, retaining editable objects.
+            # Bake source coords into the shared floor canvas, keeping objects editable.
             scale=min(1436/draft.width,751/draft.height)
             ox,oy=(1436-draft.width*scale)/2,(751-draft.height*scale)/2
             children=[replace(cloned[i.id],x=i.x*scale+ox,y=i.y*scale+oy,
@@ -1001,7 +1001,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
                     if key.startswith(f"{parent.id}:"): self.document.floors.pop(key)
                 self.document.floors[CAMPUS]=[editable if i.id==parent.id else i for i in self.document.floors[CAMPUS]]
                 self.import_document(draft,editable)
-                # One undo restores both the image placement and all converted objects.
+                # One undo restores both the image placement and all its objects.
                 self.document.undo_stack.pop()
                 self.document.remember(before)
             if any(self.document.floors.get(scope_key(parent,layer)) for layer in self.document.layers(parent)):

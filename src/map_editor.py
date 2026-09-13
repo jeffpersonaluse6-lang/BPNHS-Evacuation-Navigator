@@ -1,4 +1,4 @@
-"""Development-only map editor launcher, beside the shared assets folder."""
+"""Dev-only map editor entry point."""
 
 from pathlib import Path
 
