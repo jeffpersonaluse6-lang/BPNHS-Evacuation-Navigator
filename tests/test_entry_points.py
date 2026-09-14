@@ -92,7 +92,7 @@ blocked = {
     'map.campus', 'map.workspace_editor', 'map.editor', 'map.demo_preview',
     'drafting.editor', 'drafting.window', 'drafting.assets', 'editor_shortcuts',
     'map.history', 'map.geometry', 'map.export', 'map.alignment', 'map.reference_layers',
-    'map.selection', 'map.building_editor', 'map.canvas_size', 'map.free_build', 'map.interaction', 'map.railing_editor', 'map.activator_editor', 'map.collision_editor',
+    'map.selection', 'map.building_editor', 'map.canvas_size', 'map.free_build', 'map.interaction', 'map.railing_editor', 'map.stair_editor', 'map.collision_editor',
 }
 class NoEditorImports(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
@@ -105,8 +105,8 @@ from map.scene import MapScene, CAMPUS, scope_key
 from drafting.models import DraftItem
 scene = load_scene(Path(sys.argv[1]) / 'missing-startup-test-map.json')
 building = DraftItem('building', 100, 100, 500, 300, floor_count=2)
-zone = DraftItem('floor_activator', 200, 100, 120, 240, fade_when_obstructing=False)
-scene.floors = {CAMPUS: [building], scope_key(building, 'Floor 1'): [zone], scope_key(building, 'Floor 2'): []}
+stair = DraftItem('stairs', 200, 100, 120, 240, fade_when_obstructing=False)
+scene.floors = {CAMPUS: [building], scope_key(building, 'Floor 1'): [stair], scope_key(building, 'Floor 2'): []}
 scene = MapScene.from_json(scene.to_json())
 page = SimpleNamespace(update=Mock(), add=Mock(), clean=Mock(), run_task=Mock())
 with patch('navigation.app.load_scene', return_value=scene), patch.object(ft, 'run') as launch:

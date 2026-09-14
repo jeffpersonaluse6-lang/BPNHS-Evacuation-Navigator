@@ -78,8 +78,7 @@ class PlayerCameraIntegrationTests(unittest.TestCase):
     def test_approach_entry_floor_blend_and_exit_keep_all_building_geometry_constant(self):
         parent=DraftItem("building",100,100,718,375.5,floor_count=4,layer_style="academic",opens="school")
         stair=DraftItem("stairs",200,100,120,240)
-        zone=DraftItem("floor_activator",200,100,120,240,activator_stair=stair.id)
-        self.scene.floors={CAMPUS:[parent],scope_key(parent,"Floor 1"):[stair,zone]}
+        self.scene.floors={CAMPUS:[parent],scope_key(parent,"Floor 1"):[stair]}
         app=EvacuationApp(page_stub(),self.scene);before=self.scene.snapshot()
         def geometry():
             seen=set();result={};pending=[app.world_view.control]

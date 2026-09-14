@@ -25,7 +25,7 @@ def fit_building(parent,floors):
     Existing floor-image footprints remain unchanged to preserve their assets.
     """
     if parent.layer_style or parent.image_src: return parent
-    points=[p for items in floors.values() for item in items if item.kind!="floor_activator" for p in item_corners(item)]
+    points=[p for items in floors.values() for item in items for p in item_corners(item)]
     if not points: raise ValueError("Place at least one building object before adding the building to the map.")
     left,top=min(p[0] for p in points),min(p[1] for p in points)
     width=max(1,max(p[0] for p in points)-left)
@@ -57,7 +57,6 @@ def map_alignment_targets(scene,current,scope):
     for source,items in layers:
         source_parent=scene.parent_for_scope(source)
         for item in items:
-            if item.kind=="floor_activator":continue
             points=[unproject(*project(source_parent,*point)) for point in item_corners(item,padded=False)]
             left,top=min(p[0] for p in points),min(p[1] for p in points)
             targets.append(DraftItem("rectangle",left,top,max(1e-6,max(p[0] for p in points)-left),

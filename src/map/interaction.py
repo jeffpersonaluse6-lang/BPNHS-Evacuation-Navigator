@@ -58,6 +58,7 @@ class Interaction:
         return [self.current[key] for key in self.originals if key in self.editor.selection.ids or key==self.editor.selected]
 
     def put(self,updates):
+        updates=dict(updates)
         for key,item in updates.items():
             self.floor_items[self.slots[key]]=item
             self.current[key]=item
@@ -112,7 +113,7 @@ class Interaction:
         overlay.extend(editor.guide_shapes())
         overlay.extend(editor.selection.visuals())
         selected=editor.selected_item()
-        if selected and len(self.current)<=1: overlay.extend(selection_shapes(selected,self.parent))
+        if selected and len(self.items())<=1: overlay.extend(selection_shapes(selected,self.parent))
         for item in self.items():
             if item.kind in {"stairs","double_stairs"}: overlay.extend(editor.stair_indicator_shapes(item))
         editor.canvas.shapes=overlay

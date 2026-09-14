@@ -3,6 +3,7 @@
 from dataclasses import replace
 import asyncio
 import math
+import time
 import flet as ft
 import flet.canvas as cv
 from drafting.editor import BuildingDraftEditor,TOOLS,STAMP_SIZES
@@ -13,7 +14,9 @@ from navigation.collision import barriers_for,move_with_collisions,find_free_pos
 from navigation.components import VirtualJoystick,user_marker
 from navigation.data import MARKER_SIZE,floor_scale
 from navigation.player_settings import PlayerSettings,load_player_settings
-from navigation.player_controls import PlayerControls,player_collision_preview
+from navigation.player_controls import PlayerControls,player_collision_preview,update_collision_preview
+from navigation.motion import MotionClock
+from navigation.runtime_cache import RuntimeIndex
 from .scene import CAMPUS,MapScene,scope_key,to_placement
 from .export import placement_code
 from .scene_store import ASSETS_DIR,load_scene,save_scene
@@ -24,13 +27,13 @@ from .selection import SelectionController,owner_for,related_owner_chain
 from .canvas_size import checked_map_size,MIN_MAP_SIZE,MAX_MAP_SIZE
 from .interaction import Interaction
 from .railing_editor import RailingEditor
-from .activator_editor import ActivatorEditor
+from .stair_editor import StairEditor,transition_shapes
 from .collision_editor import CollisionEditor
 from navigation.stairs import STAIR_KINDS,indicators
 
 MAP_TOOLS=[("select","Select"),("pan","Pan"),("building","Building"),("room","Room"),
-    ("wall","Wall"),("railing","Railing / barrier"),("floor","Floor section"),("entry_zone","Entry / approach area"),("floor_activator","Floor Activator")]+[(k,v) for k,v in TOOLS if k not in {"select","pan","room","wall"}]
-MAP_STAMPS={**STAMP_SIZES,"building":(300,180),"railing":(200,0),"floor":(300,180),"entry_zone":(180,120),"floor_activator":(100,200)}
+    ("wall","Wall"),("railing","Railing / barrier"),("floor","Floor section"),("entry_zone","Entry / approach area")]+[(k,v) for k,v in TOOLS if k not in {"select","pan","room","wall"}]
+MAP_STAMPS={**STAMP_SIZES,"building":(300,180),"railing":(200,0),"floor":(300,180),"entry_zone":(180,120)}
 LINE_KINDS={"line","wall","railing"}
 
 
@@ -63,7 +66,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         try:self.player_preferences=load_player_settings()
         except (ValueError,OSError):self.player_preferences=PlayerSettings()
         if self.player_preferences.collision_radius>min(scene.width,scene.height)/2:
-            self.player_preferences=PlayerSettings(self.player_preferences.visual_size)
+            self.player_preferences=replace(self.player_preferences,collision_radius=26)
         self.player_selected=False
         self.player_barrier_cache=None
         self.player_controls=PlayerControls(lambda:self.player_preferences,self.apply_player_preferences,self.deselect_player)
@@ -86,19 +89,12 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         self.reference_label=ft.Text(size=12,color="#2563EB")
         self.blocks=ft.Checkbox(label="Blocks player",value=True)
         self.fade=ft.Checkbox(label="Fade when view is obstructed",value=True)
-        self.stair_direction=ft.Dropdown(label="Direction / left flight",value="up",dense=True,
-            options=[ft.DropdownOption("up","Up"),ft.DropdownOption("down","Down")],on_select=self.apply_stair_settings)
-        self.stair_right=ft.Dropdown(label="Right flight direction",value="down",dense=True,
-            options=[ft.DropdownOption("up","Up"),ft.DropdownOption("down","Down")],on_select=self.apply_stair_settings)
-        self.stair_to=ft.TextField(label="Destination floor (blank = adjacent)",dense=True)
-        self.stair_right_to=ft.TextField(label="Right flight destination (optional)",dense=True)
         self.approach=ft.TextField(label="Roof reveal distance (map units)",dense=True)
         self.owner=ft.Dropdown(label="Attached to (same floor)",dense=True,on_select=self.attach_selected)
         self.length=ft.TextField(label="Length (walls / railings)",dense=True,visible=False)
         self.railings=RailingEditor(self)
         self.collision_editor=CollisionEditor(self)
-        self.activator_editor=ActivatorEditor(self)
-        self.show_activators=ft.Checkbox(label="Show Floor Activators",value=True,on_change=self.activators_visibility)
+        self.stair_editor=StairEditor(self)
         self.floor_count=ft.TextField(label="Building floors",dense=True,visible=False)
         self.shortcuts=EditorShortcuts(page,lambda:self.history(False),lambda:self.history(True),
             blocked=lambda:self.exporting or self.dialog_open or self.move_mode or not self.active,
@@ -106,7 +102,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         self.shortcuts.actions={"c":self.selection.copy,"v":self.selection.paste,"g":self.selection.group,
             "shift+g":lambda:self.selection.group(True),"a":self.select_all,
             "plain:delete":self.delete,"plain:escape":self.deselect}
-        for field in [self.name,self.map_width,self.map_height,self.length,self.floor_count,self.stair_to,self.stair_right_to,self.approach,*self.properties.values()]: self.shortcuts.watch_text(field)
+        for field in [self.name,self.map_width,self.map_height,self.length,self.floor_count,self.stair_editor.speed,self.approach,*self.properties.values()]: self.shortcuts.watch_text(field)
         self.shortcuts.watch_text(self.railings.slider)
         self.shortcuts.watch_text(self.collision_editor.slider)
         self.shortcuts.watch_text(self.collision_editor.field)
@@ -124,10 +120,10 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         inspector.controls.insert(1,self.blocks)
         inspector.controls.insert(2,self.length)
         inspector.controls.insert(3,self.railings.control)
-        inspector.controls.insert(3,self.activator_editor.control)
+        inspector.controls.insert(3,self.stair_editor.control)
         inspector.controls.insert(3,self.collision_editor.control)
         inspector.controls.insert(3,self.floor_count)
-        inspector.controls[4:4]=[self.fade,self.owner,self.approach,self.stair_direction,self.stair_right,self.stair_to,self.stair_right_to]
+        inspector.controls[4:4]=[self.fade,self.owner,self.approach]
         self.sidebar.width=250
         self.sidebar.visible=True
         self.scene_stack=ft.Stack(width=scene.width,height=scene.height)
@@ -173,7 +169,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             ft.Row(scroll=ft.ScrollMode.AUTO,spacing=6,controls=[self.snap,self.grid,self.spacing,self.ortho,
                 self.smart_structure,
                 self.smart_snap,self.equal_spacing,self.snap_distance,
-                self.collisions,self.show_activators,self.walk_button,self.select_player_button,
+                self.collisions,self.walk_button,self.select_player_button,
                 ft.IconButton(icon=ft.Icons.ZOOM_IN,on_click=self.zoom_in),
                 ft.IconButton(icon=ft.Icons.ZOOM_OUT,on_click=self.zoom_out),
                 ft.Button("Reset view",on_click=self.reset_view),
@@ -240,10 +236,11 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             self.building_actions,self.selected_building_name,self.edit_building_button,
             self.undo_button,self.redo_button,self.duplicate_button,self.delete_button,self.map_size_button,
             self.map_width,self.map_height,self.mirror,self.blocks,self.length,self.floor_count,self.fade,self.approach,
-            self.stair_direction,self.stair_right,self.stair_to,self.stair_right_to,self.railings.control,self.railings.slider,
+            self.railings.control,self.railings.slider,
             self.collision_editor.control,self.collision_editor.field,self.collision_editor.slider,
-            self.activator_editor.control,self.activator_editor.source,self.activator_editor.target,self.activator_editor.direction,
-            self.activator_editor.stair,self.activator_editor.axis,self.activator_editor.enabled,*self.properties.values(),*self.tool_buttons.values()]
+            self.stair_editor.control,self.stair_editor.source,self.stair_editor.target,self.stair_editor.direction,
+            self.stair_editor.enabled,self.stair_editor.right,self.stair_editor.right_direction,self.stair_editor.right_target,
+            self.stair_editor.right_enabled,self.stair_editor.speed,*self.properties.values(),*self.tool_buttons.values()]
         result={}
         for control in controls:
             state=tuple(getattr(control,key,None) for key in ("value","visible","disabled","bgcolor","content"))
@@ -280,8 +277,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             controls=render_scene(self.document,self.floor,self.collisions.value,self.grid.value,
                 int(self.spacing.value),self.image_cache,self.vector_cache,show_coordinates=True,preview_item=self.preview,
                 floor_underlay=reference_controls(self.document,self.floor,self.references,self.reference_cache) if not self.move_mode else (),
-                hidden_buildings=getattr(self,"hidden_buildings",()),background_cache=self.background_cache,
-                show_activators=self.show_activators.value and not self.move_mode)
+                hidden_buildings=getattr(self,"hidden_buildings",()),background_cache=self.background_cache)
         overlay=[]
         if not self.move_mode:
             if not getattr(self,"building_session",False): overlay.extend(active_floor_outline(self.document,self.floor,self.view_scale))
@@ -300,9 +296,11 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         if self.move_mode:
             x,y=self.document.project(self.floor,*self.player)
             size=self.player_preferences.visual_size
-            controls.append(player_collision_preview((x,y),self.player_preferences.collision_radius,self.player_selected))
+            self.walk_collision_preview=player_collision_preview((x,y),self.player_preferences.collision_radius,self.player_selected)
+            controls.append(self.walk_collision_preview)
             marker=user_marker(x-size/2,y-size/2,size)
             marker.on_click=self.select_player
+            self.walk_marker=marker
             controls.append(marker)
         if not selection_only:self.scene_stack.controls=self.arrange_scene(controls)
         self.scene_stack.width=self.gesture.width=self.document.width
@@ -318,7 +316,6 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         for kind,button in self.tool_buttons.items():
             button.bgcolor="#DBEAFE" if kind==self.tool else None
             button.disabled=self.move_mode
-            if kind=="floor_activator":button.disabled=self.move_mode or not parent or self.floor.endswith(":Roof") or parent.floor_count<2
         if not item: self.selected=None
         references=self.references.layers(self.document,self.floor)
         self.reference_label.value=("Current floor only" if parent and not references else
@@ -345,7 +342,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             self.length.visible=bool(item and item.kind in LINE_KINDS)
             self.railings.sync(item,len(selected_items)>1)
             self.collision_editor.sync(item,len(selected_items)>1)
-            self.activator_editor.sync(item,len(selected_items)>1)
+            self.stair_editor.sync(item,len(selected_items)>1)
             self.blocks.visible=bool(item and item.kind in COLLISION_KINDS)
             self.floor_count.visible=bool(item and item.kind=="building")
             self.approach.visible=self.floor_count.visible
@@ -354,9 +351,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             self.dropdown_options(self.owner,owner_options)
             self.owner.value=item.parent_id or "" if item else ""
             self.owner.disabled=self.fade.disabled=not item or self.move_mode or len(selected_items)>1
-            for control in (self.stair_direction,self.stair_to): control.visible=bool(item and item.kind in STAIR_KINDS)
-            for control in (self.stair_right,self.stair_right_to): control.visible=bool(item and item.kind=="double_stairs")
-            for control in (self.stair_direction,self.stair_right,self.stair_to,self.stair_right_to,self.approach):
+            for control in (self.approach,):
                 control.disabled=not item or self.move_mode or len(selected_items)>1
             if item:
                 for key,field in self.properties.items(): field.value=str(getattr(item,key))
@@ -367,10 +362,6 @@ class MapWorkspaceEditor(BuildingDraftEditor):
                 self.floor_count.value=str(item.floor_count)
                 self.fade.value=item.fade_when_obstructing
                 self.approach.value=str(item.approach_distance)
-                self.stair_direction.value=item.stair_direction
-                self.stair_right.value=item.stair_right_direction
-                self.stair_to.value=str(item.stair_to or "")
-                self.stair_right_to.value=str(item.stair_right_to or "")
             else:
                 for field in self.properties.values(): field.value=""
         if update:
@@ -388,11 +379,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
 
     def choose_tool(self,kind):
         if self.move_mode: return
-        if kind=="floor_activator":
-            parent=self.parent()
-            if not parent or self.floor.endswith(":Roof") or parent.floor_count<2:
-                self.status.value="Open a building floor with at least two floors to place an activator.";self.page.update(self.status);return
-            self.show_activators.value=True
+        if kind not in dict(MAP_TOOLS):return
         if kind=="building" and not getattr(self,"building_session",False):
             self.open_building_editor()
             return
@@ -410,20 +397,25 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             if kind in OPENING_KINDS else "click to place or drag to draw. Square handles resize; ↻ rotates.")
         self.refresh(properties=True)
 
+    def modify(self,callback):
+        self.cancel_gesture(update=False)
+        before=self.document.snapshot()
+        callback()
+        self.document.remember(before)
+        self.refresh(properties=True)
+
     def create_item(self,kind,x,y,w,h):
         item=super().create_item(kind,x,y,w,h)
         if kind in {"wall","room"}:return replace(item,collision_thickness=collision_thickness(item))
-        if kind=="stairs": return replace(item,stair_direction=self.new_stair_direction)
+        if kind in STAIR_KINDS:
+            source=int(self.floor.split()[-1]) if ":Floor " in self.floor else None
+            return replace(item,stair_from=source,stair_direction=self.new_stair_direction if kind=="stairs" else item.stair_direction)
         if kind=="floor": return replace(item,stroke=0,fill="#FFFFFF",blocking=False,text="Floor section")
         if kind=="railing":
             item=replace(item,stroke=10,color="#475569",text="Railing")
             return replace(item,collision_thickness=collision_thickness(item))
         if kind=="building": return replace(item,fill="#F5DF85",color="#263238",text="New building",opens=f"scene:{item.id}")
         if kind=="entry_zone": return replace(item,fill="none",color="#059669",text="Entry area",blocking=False)
-        if kind=="floor_activator":
-            source=int(self.floor.split()[-1]);target=source+1 if source<self.parent().floor_count else source-1
-            return replace(item,text="Floor Activator",blocking=False,color="#7C3AED",fill="none",
-                activator_from=source,activator_to=target,stair_direction="up" if target>source else "down")
         return item
 
     def hit_handle(self,item,x,y):
@@ -556,18 +548,12 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         if hasattr(self,"selection"): self.selection.finish()
 
     def editable_items(self):
-        return [i for i in self.items() if self.show_activators.value or i.kind!="floor_activator"]
-
-    def activators_visibility(self,event=None):
-        self.cancel_gesture(update=False)
-        self.selection.select(self.selection.ids & {i.id for i in self.editable_items()},False)
-        if self.tool=="floor_activator" and not self.show_activators.value:self.tool="select"
-        self.refresh(properties=True)
+        return list(self.items())
 
     def alignment_items(self):
         items=list(self.editable_items())
         if getattr(self,"building_session",False):
-            items.extend(i for key,_ in self.references.layers(self.document,self.floor) for i in self.document.floors.get(key,[]) if i.kind!="floor_activator")
+            items.extend(i for key,_ in self.references.layers(self.document,self.floor) for i in self.document.floors.get(key,[]))
         return items
 
     def select_all(self):
@@ -583,6 +569,8 @@ class MapWorkspaceEditor(BuildingDraftEditor):
     def stair_indicator_shapes(self,item):
         from .scene_renderer import project
         shapes=[]
+        if self.parent() and ":Floor " in self.floor:
+            shapes.extend(transition_shapes(item,self.parent(),int(self.floor.split()[-1]),self.view_scale))
         for start,end,label in indicators(item):
             a,b=[project(self.parent(),*item.local_to_world(*p)) for p in (start,end)]
             dx,dy=b[0]-a[0],b[1]-a[1]
@@ -596,13 +584,6 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             shapes.append(cv.Text(a[0],a[1],label,rotate=math.atan2(dy,dx)+math.pi/2,
                 style=ft.TextStyle(size=11/self.view_scale,color="#2563EB",bgcolor="#FFFFFF")))
         return shapes
-
-    def apply_stair_settings(self,event=None):
-        item=self.selected_item()
-        if item and item.kind in STAIR_KINDS and len(self.selection.items())==1 and not self.move_mode:
-            changed=replace(item,stair_direction=self.stair_direction.value,stair_right_direction=self.stair_right.value,
-                stair_to=None,stair_right_to=None)
-            self.modify(lambda:self.document.floors.__setitem__(self.floor,[changed if i.id==item.id else i for i in self.items()]))
 
     def choose_stair(self,direction):
         self.new_stair_direction=direction
@@ -855,16 +836,19 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             if item.layer_style and count!=item.floor_count: raise ValueError("Existing floor images determine this building's floor count")
             if count<item.floor_count and any(self.document.floors.get(scope_key(item,f"Floor {n}")) for n in range(count+1,item.floor_count+1)):
                 raise ValueError("Delete objects on the higher floors before reducing floor count")
+            if count<item.floor_count and any(i.kind in STAIR_KINDS and any(t is not None and t>count for t in (i.stair_to,i.stair_right_to))
+                    for n in range(1,count+1) for i in self.document.floors.get(scope_key(item,f"Floor {n}"),[])):
+                raise ValueError("Change stairs leading to deleted floors first, or use Remove current floor")
             changed=replace(item,**values,mirrored=self.mirror.value,blocking=self.blocks.value if item.kind in COLLISION_KINDS else item.blocking,floor_count=count,
                 collision_thickness=collision_thickness(item) if item.kind in {"wall","room","railing"} or
                     (item.kind in STAIR_KINDS and self.blocks.value) else item.collision_thickness,
                 completed_floors=tuple(n for n in item.completed_floors if n<=count),fade_when_obstructing=self.fade.value,
-                approach_distance=float(self.approach.value) if item.kind=="building" else item.approach_distance,
-                stair_to=int(self.stair_to.value) if item.kind in STAIR_KINDS and self.stair_to.value.strip() else None,
-                stair_right_to=int(self.stair_right_to.value) if item.kind=="double_stairs" and self.stair_right_to.value.strip() else None)
+                approach_distance=float(self.approach.value) if item.kind=="building" else item.approach_distance)
             validate_item(changed)
             def apply():
                 self.document.floors[self.floor]=[changed if i.id==item.id else i for i in self.items()]
+                if item.kind=="building":
+                    for n in range(1,count+1):self.document.floors.setdefault(scope_key(item,f"Floor {n}"),[])
                 for n in range(count+1,item.floor_count+1): self.document.floors.pop(scope_key(item,f"Floor {n}"),None)
             self.modify(apply)
         except (ValueError,TypeError) as error:
@@ -1047,6 +1031,12 @@ class MapWorkspaceEditor(BuildingDraftEditor):
                 return
             self.player=self.document.unproject(self.floor,*spawn)
         self.move_mode=not self.move_mode
+        if self.move_mode:
+            from navigation.collision import barrier_bounds
+            barriers=self.player_barriers()
+            self.walk_barrier_index=RuntimeIndex(barriers,[barrier_bounds((b,)) for b in barriers])
+            self.walk_camera_target=(0.,0.);self.walk_camera_offset=(0.,0.)
+        else:self.walk_barrier_index=None
         self.direction=(0,0)
         self.joystick_control.visible=self.move_mode
         self.select_player_button.visible=self.move_mode
@@ -1069,20 +1059,50 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         start=self.document.project(self.floor,*self.player)
         target=self.document.project(self.floor,self.player[0]+dx,self.player[1]+dy)
         moved=move_with_collisions(*start,target[0]-start[0],target[1]-start[1],self.player_preferences.collision_radius,
-            self.player_barriers(),width,height)
+            getattr(self,"walk_barrier_index",None) or self.player_barriers(),width,height)
         self.player=self.document.unproject(self.floor,*moved)
         return self.player[0]-before[0],self.player[1]-before[1]
 
     async def movement_loop(self):
+        clock=MotionClock(time.perf_counter())
         while not getattr(self,"closed",False):
-            await asyncio.sleep(1/30)
-            if not self.active or not self.move_mode or self.direction==(0,0): continue
-            dx,dy=self.move_player(self.direction[0]*10,self.direction[1]*10)
+            await asyncio.sleep(clock.delay(time.perf_counter(),1/30))
+            dt=clock.advance(time.perf_counter())
+            if not self.active or not self.move_mode or dt<=0: continue
+            speed=self.player_preferences.player_speed
+            length=max(1,math.hypot(*self.direction))
+            # Native editor coordinates can be scaled; speed is in map units.
+            start=self.document.project(self.floor,*self.player)
+            target=self.document.unproject(self.floor,start[0]+self.direction[0]/length*speed*dt,
+                start[1]+self.direction[1]/length*speed*dt)
+            dx,dy=self.move_player(target[0]-self.player[0],target[1]-self.player[1]) if self.direction!=(0,0) else (0,0)
             if dx or dy:
-                self.refresh()
                 before=self.document.project(self.floor,self.player[0]-dx,self.player[1]-dy)
                 after=self.document.project(self.floor,*self.player)
-                await self.viewer.pan(before[0]-after[0],before[1]-after[1])
+                self.update_walk_player(after)
+                tx,ty=self.walk_camera_target
+                self.walk_camera_target=(tx+before[0]-after[0],ty+before[1]-after[1])
+            ox,oy=self.walk_camera_offset;tx,ty=self.walk_camera_target
+            alpha=-math.expm1(-(5 if dx or dy else 7)*dt)
+            nx,ny=ox+(tx-ox)*alpha,oy+(ty-oy)*alpha
+            # A conservative trailing bound, even when zoomed in.
+            limit=40/max(.1,self.view_scale)
+            nx=tx+max(-limit,min(limit,nx-tx));ny=ty+max(-limit,min(limit,ny-ty))
+            self.walk_camera_offset=(nx,ny)
+            if math.hypot(nx-ox,ny-oy)>1e-6:await self.viewer.pan(nx-ox,ny-oy)
+
+    def update_walk_player(self,center=None):
+        """Keep the locked test-walk map static; move only its retained dot."""
+        center=center or self.document.project(self.floor,*self.player)
+        marker=self.walk_marker;size=self.player_preferences.visual_size
+        marker.left,marker.top=center[0]-size/2,center[1]-size/2
+        marker.width=marker.height=size;marker.border_radius=size/2
+        dirty=[marker]
+        preview=self.walk_collision_preview
+        if self.player_selected or preview.visible:
+            update_collision_preview(preview,center,self.player_preferences.collision_radius,self.player_selected)
+            dirty.append(preview)
+        self.page.update(*dirty)
 
     def run_demo(self,event=None):
         self.cancel_gesture(update=False)

@@ -231,12 +231,11 @@ class WorldRadiusTests(unittest.TestCase):
         from navigation.world import FloorTravel
         parent=DraftItem("building",0,0,1436,751,floor_count=2)
         stair=DraftItem("stairs",150,100,100,200)
-        zone=DraftItem("floor_activator",150,100,100,200,activator_stair=stair.id)
         scene=MapScene();scene.floors[CAMPUS]=[parent]
-        scene.floors[scope_key(parent,"Floor 1")]=[stair,zone]
+        scene.floors[scope_key(parent,"Floor 1")]=[stair]
         scene.floors[scope_key(parent,"Floor 2")]=[DraftItem("wall",220,100,0,200,stroke=4)]
         state=NavigationState(collision_radius=8);nav=WorldNavigator(scene,state);nav.enter(parent)
-        nav.travel=FloorTravel(zone,1,2,.5)
+        nav.travel=FloorTravel(nav.candidates()[0],1,2,.5)
         self.assertTrue(nav.allowed((200,200)))
         state.collision_radius=20;self.assertFalse(nav.allowed((200,200)))
 

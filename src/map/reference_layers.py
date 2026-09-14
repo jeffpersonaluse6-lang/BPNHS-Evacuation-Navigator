@@ -42,7 +42,6 @@ def reference_controls(scene, scope, view, cache=None):
         shapes = []
         openings = OpeningIndex(openings_for(children))
         for item in children:
-            if item.kind=="floor_activator":continue
             # Outlines work better as blueprint references than opaque room fills.
             ghost = replace(item, fill="none", color="#64748B")
             shapes.extend(item_shapes(ghost, parent, False, openings.for_wall(ghost)))

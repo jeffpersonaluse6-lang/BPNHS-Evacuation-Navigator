@@ -36,9 +36,6 @@ def wall_polygon(barrier):
 
 @lru_cache(maxsize=2048)
 def item_shapes(item,parent=None,collisions=False,openings=()):
-    if item.kind=="floor_activator":
-        from .activator_editor import zone_shapes
-        return zone_shapes(item,parent)
     shapes=[]
     scale=min(floor_scale(parent))
     for primitive in primitives(item):
@@ -115,7 +112,7 @@ def building_image(item,layer="Roof",show_coordinates=False):
 
 def render_scene(scene,scope=CAMPUS,collisions=False,grid=True,spacing=20,
                  image_cache=None,vector_cache=None,show_coordinates=False,preview_item=None,
-                 floor_underlay=(),hidden_buildings=(),background_cache=None,show_activators=True):
+                 floor_underlay=(),hidden_buildings=(),background_cache=None):
     image_cache={} if image_cache is None else image_cache
     vector_cache={} if vector_cache is None else vector_cache
     background_signature=(scene.width,scene.height,grid,spacing)
@@ -130,7 +127,6 @@ def render_scene(scene,scope=CAMPUS,collisions=False,grid=True,spacing=20,
         if background_cache is not None:background_cache.update(signature=background_signature,controls=tuple(controls))
     parent=scene.parent_for_scope(scope)
     contexts={}
-    activators=[]
 
     def context(layer):
         if layer in contexts: return contexts[layer]
@@ -140,9 +136,6 @@ def render_scene(scene,scope=CAMPUS,collisions=False,grid=True,spacing=20,
         return contexts[layer]
 
     def vector(item,owner=None,openings=()):
-        if item.kind=="floor_activator":
-            if show_activators:activators.append((item,owner))
-            return
         openings=openings.for_wall(item) if item.kind in WALL_KINDS else ()
         signature=(item,owner,collisions,openings)
         cached=vector_cache.get(item.id)
@@ -188,13 +181,6 @@ def render_scene(scene,scope=CAMPUS,collisions=False,grid=True,spacing=20,
         for visible_scope in visible_scopes:
             layer_openings=context(visible_scope)
             for child in scene.floors.get(visible_scope,[]): vector(child,item,layer_openings)
-    for item,owner in activators:
-        signature=(item,owner,False,())
-        cached=vector_cache.get(item.id)
-        canvas=cached[1] if cached else cv.Canvas(width=scene.width,height=scene.height)
-        canvas.width,canvas.height=scene.width,scene.height
-        if cached is None or cached[0]!=signature:canvas.shapes=list(item_shapes(item,owner))
-        vector_cache[item.id]=(signature,canvas);controls.append(canvas)
     valid_ids={item.id for items in scene.floors.values() for item in items}
     for cache in (image_cache,vector_cache):
         for key in list(cache):

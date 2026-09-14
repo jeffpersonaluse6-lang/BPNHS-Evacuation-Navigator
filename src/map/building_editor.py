@@ -39,11 +39,12 @@ class BuildingEditor(MapWorkspaceEditor):
         self.name.on_change=self.rename_building
         self.floor_panel=ft.Row(scroll=ft.ScrollMode.AUTO,spacing=4)
         self.done_button=ft.Button("Floor 1 Done",on_click=self.floor_done)
+        self.add_floor_button=ft.Button("Add floor",icon=ft.Icons.ADD,on_click=self.add_floor)
         self.commit_button=ft.Button("Save Building Changes" if self.editing_existing else "Add Building to Map",
             icon=ft.Icons.SAVE,on_click=self.commit)
         self.control.controls[0]=ft.Row(scroll=ft.ScrollMode.AUTO,controls=[
             ft.Text("BPNHS Building Editor",size=21,weight=ft.FontWeight.BOLD),self.name,
-            self.done_button,
+            self.done_button,self.add_floor_button,
             ft.Button("Remove current floor",on_click=self.remove_floor),
             self.commit_button,ft.Button("Cancel",on_click=self.cancel)])
         self.control.controls.insert(2,self.floor_panel)
@@ -136,6 +137,7 @@ class BuildingEditor(MapWorkspaceEditor):
             layer=self.floor.split(":",1)[-1]
             self.done_button.content=f"{layer} Done → next"
             self.done_button.disabled=not layer.startswith("Floor ")
+            self.add_floor_button.disabled=bool(parent.layer_style) or self.move_mode or self.exporting
         if update: self.page.update()
 
     def arrange_scene(self,controls):
@@ -166,6 +168,18 @@ class BuildingEditor(MapWorkspaceEditor):
     def update_parent(self,parent):
         if parent.id!=self.building_id: raise ValueError("Only the current building can be changed")
         self.document.floors[CAMPUS]=[parent if i.id==parent.id else i for i in self.document.floors[CAMPUS]]
+
+    def add_floor(self,event=None):
+        if not self.active or self.move_mode or self.exporting or self.dialog_open:return
+        parent=self.building()
+        if parent.layer_style:return
+        count=parent.floor_count+1
+        def add():
+            self.update_parent(replace(parent,floor_count=count))
+            self.document.floors.setdefault(scope_key(parent,f"Floor {count}"),[])
+        self.modify(add)
+        self.status.value=f"Floor {count} added. Configure each section's From Floor and To Floor."
+        self.page.update(self.status)
 
     def floor_done(self,event=None):
         if not self.active or self.move_mode or self.exporting or self.dialog_open: return
@@ -198,20 +212,19 @@ class BuildingEditor(MapWorkspaceEditor):
                 dest=n-1 if n>number else n
                 children=[]
                 for item in items:
-                    if item.kind=="floor_activator":
-                        if item.activator_to==number:continue
-                        item=replace(item,activator_from=dest,activator_to=item.activator_to-1 if item.activator_to>number else item.activator_to)
                     targets={}
+                    if item.kind in {"stairs","double_stairs"}:targets["stair_from"]=dest
                     for key in ("stair_to","stair_right_to"):
                         target=getattr(item,key)
                         targets[key]=None if target==number else target-1 if target and target>number else target
+                        if target==number:targets["stair_enabled" if key=="stair_to" else "stair_right_enabled"]=False
                     children.append(replace(item,**targets))
                 self.document.floors[scope_key(parent,f"Floor {dest}")]=children
             self.update_parent(replace(parent,floor_count=parent.floor_count-1,
                 completed_floors=tuple(n-1 if n>number else n for n in parent.completed_floors if n!=number)))
             self.document.remember(before)
             self.change_scope(scope_key(parent,f"Floor {min(number,parent.floor_count-1)}"))
-        self.confirm("Delete this floor and activators leading to it, then renumber higher floors? Undo can restore them.",remove)
+        self.confirm("Delete this floor, disable stairs leading to it, then renumber higher floors? Undo can restore them.",remove)
 
     def duplicate(self,event=None):
         if self.floor!=CAMPUS: super().duplicate(event)
@@ -270,14 +283,14 @@ class BuildingEditor(MapWorkspaceEditor):
         copies,_=clone_bundle(originals,{})
         adjusted=[]
         for original,item in zip(originals,copies):
-            if item.kind=="floor_activator":
-                target=item.activator_to+1
-                if target>self.building().floor_count:
-                    self.status.value="Copy would lead to a missing floor. Add another floor before copying activators.";self.refresh();return
-                item=replace(item,activator_from=number,activator_to=target)
             targets={key:(getattr(item,key)+1 if getattr(item,key) is not None and
                           getattr(item,key)<self.building().floor_count else None)
                      for key in ("stair_to","stair_right_to")}
+            if item.kind in {"stairs","double_stairs"}:
+                targets["stair_from"]=number
+                for key in ("stair_to","stair_right_to"):
+                    if getattr(item,key) is not None and targets[key] is None:
+                        targets["stair_enabled" if key=="stair_to" else "stair_right_enabled"]=False
             adjusted.append(replace(item,**targets,parent_id=self.building_id if original.parent_id==self.building_id else item.parent_id))
         def copy(): self.modify(lambda:self.document.floors.__setitem__(self.floor,adjusted))
         if self.items(): self.confirm("Replace this floor with a copy of this building's previous floor?",copy)

@@ -81,7 +81,6 @@ def clone_bundle(roots,floors):
     def clone(item):
         return replace(item,id=ids[item.id],parent_id=ids.get(item.parent_id),
             group_id=groups.get(item.group_id),
-            activator_stair=ids.get(item.activator_stair,item.activator_stair),
             opens=f"scene:{ids[item.id]}" if item.kind=="building" and (not item.opens or item.opens.startswith("scene:")) else item.opens)
     new_roots=[clone(i) for i in roots]
     new_floors={f"{ids[key.split(':',1)[0]]}:{key.split(':',1)[1]}":[clone(i) for i in children]
@@ -264,18 +263,21 @@ class SelectionController:
         roots,floors=clone_bundle(roots,floors)
         if on_floor:
             source=int(editor.floor.split()[-1]) if ":Floor " in editor.floor else None
-            if any(i.kind=="floor_activator" for i in roots) and source is None:
-                editor.status.value="Paste Floor Activators onto a numbered building floor.";editor.refresh();return
-            valid_stairs={i.id for i in [*editor.items(),*roots] if i.kind in {"stairs","double_stairs"}}
             adjusted=[]
             for item in roots:
-                if item.kind=="floor_activator":
-                    target=source+item.activator_to-item.activator_from
-                    if not 1<=target<=editor.parent().floor_count:
-                        editor.status.value="Pasted activator would lead to a missing floor. Add that floor first.";editor.refresh();return
-                    linked=item.activator_stair is None or item.activator_stair in valid_stairs
-                    item=replace(item,activator_from=source,activator_to=target,
-                        activator_stair=item.activator_stair if linked else None,activator_enabled=item.activator_enabled and linked)
+                if item.kind in {"stairs","double_stairs"}:
+                    if source is None:
+                        item=replace(item,stair_from=None,stair_enabled=False,stair_right_enabled=False)
+                    else:
+                        offset=source-(item.stair_from or source);changes={"stair_from":source}
+                        for key in ("stair_to","stair_right_to"):
+                            target=getattr(item,key)
+                            if target is not None:
+                                target+=offset
+                                if not 1<=target<=editor.parent().floor_count:
+                                    editor.status.value="Pasted stair would lead to a missing floor. Add that floor first.";editor.refresh();return
+                            changes[key]=target
+                        item=replace(item,**changes)
                 adjusted.append(item)
             roots=adjusted
         copied=[]
@@ -311,7 +313,6 @@ class SelectionController:
                 if item.id in ids:continue
                 changes={}
                 if item.parent_id in ids:changes["parent_id"]=None
-                if item.activator_stair in ids:changes.update(activator_stair=None,activator_enabled=False)
                 kept.append(replace(item,**changes) if changes else item)
             editor.document.floors[editor.floor]=kept
             for key in list(editor.document.floors):

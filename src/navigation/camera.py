@@ -139,7 +139,7 @@ class CameraViewport(ft.GestureDetector):
     async def reset(self):
         self.camera.scale=1;self.camera.rotation=0;self.camera.x=self.camera.y=0;self.apply()
 
-    def follow(self,point,dt,*,moving=False,diameter=20,guard=None):
+    def follow(self,point,dt,*,moving=False,diameter=20,guard=None,update=True):
         changed=self.camera.follow(point,dt,moving=moving,diameter=diameter,guard=guard)
-        if changed:self.apply()
+        if changed:self.apply(update)
         return changed

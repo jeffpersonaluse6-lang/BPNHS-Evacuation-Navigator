@@ -305,8 +305,6 @@ class FreeBuildingTests(unittest.TestCase):
         up=DraftItem("stairs",2100,800,80,160)
         b.items().append(up);b.floor_done()
         b.items().append(replace(up,id="return-stairs",stair_direction="down"))
-        b.document.floors[scope_key(b.building(),"Floor 1")].append(DraftItem("floor_activator",2100,800,80,160,
-            activator_stair=up.id,blocking=False))
         parent=self.commit();nav=WorldNavigator(self.scene,NavigationState())
         nav.update((2140,961));nav.update((2140,959))
         self.assertIsNotNone(nav.travel)

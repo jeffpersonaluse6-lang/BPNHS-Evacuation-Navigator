@@ -64,8 +64,8 @@ Zoom controls still control only the view, not the saved canvas size.
    Select an existing free building and **Edit This Building** to revise it;
    **Save Building Changes** updates its identity without adding a copy.
    **Remove current floor** confirms deletion and renumbers higher floors and
-   explicit stair/activator destinations. Activators leading to the removed floor
-   are also removed. Undo can restore them. Source images
+   explicit stair destinations. Stair flights leading to the removed floor
+   are disabled rather than redirected to an unintended floor. Undo can restore them. Source images
    keep their original floor count. You can finish a single-floor building without
    pressing Done, or remove an unwanted empty next floor before saving.
 7. In the Map Editor, select the whole building to change its placement.
@@ -93,7 +93,7 @@ when selecting other objects or multiple objects. Older image buildings can stil
 be reopened through **Editing layer**.
 
 **Edit This Building** opens the original Building Editor with the same ID, name,
-transform, floors, components, manual groups, attachments and activator connections.
+transform, floors, components, manual groups, attachments and stair connections.
 Saved free-building floors are marked complete; choose any floor to edit it again,
 add floors with Done, remove floors, or select Roof. The other campus structures
 remain faded, locked references. Edits are staged until you save them.
@@ -133,13 +133,11 @@ without allowing reference objects to be selected or modified.
 
 **Stair Up** and **Stair Down** reuse the single Stair tool. Double Stairs retain
 their original landing, step lines and divider. Direction/left flight and right
-flight properties reverse the progressive tread shading independently; selecting
-stairs shows rotated blue UP/DOWN arrows only in the editor. Changing direction
-immediately resets the destination to the adjacent floor in that direction.
-An optional stair destination can be entered and applied with Properties. A saved
-explicit destination must exist and agree with up/down. These stair properties
-describe the drawing; they no longer automatically trigger runtime floor changes.
-Use explicit Floor Activators as described below.
+flight properties reverse the progressive tread shading independently. Select a
+stair to configure **Stair floor transition**, then **Apply stair settings**.
+The selected stair shows blue UP/DOWN arrows and derived walking-area guides only
+in the editor. The connection belongs to the stair, not a separate drawn zone.
+A saved explicit destination must exist and agree with Up/Down.
 
 Place matching stairs/landings at the same coordinates on connected floors. Up
 travels from the bottom end toward the top/landing; Down reverses it. Double stairs
@@ -152,65 +150,71 @@ a footprint or authored **Entry / approach area** fades its roof over 140 ms.
 the player's actual map coordinates and joystick input. Entry areas on Floor 1
 belong to that building automatically; campus areas can be attached to a building.
 
-Building entry keeps the player on Floor 1. Neither proximity, building bounds,
-upper-floor geometry nor stair drawings can activate another floor. Ground-floor
+Building entry keeps the player on Floor 1. Proximity, building bounds and unrelated
+upper-floor geometry cannot activate another floor; only stair entry does. Ground-floor
 exit restores the roof on departure. Explicitly non-fading roof objects stay visible.
 
-### Floor Activators
+### Stair-owned floor transitions
 
-1. Create both connected floors first. Return to the source floor and choose
-   **Floor Activator**. Drag a rectangle over the intended stair flight. This tool
-   is unavailable on Campus, Roof or a building with only one floor.
-2. Select the purple zone and configure **From Floor**, **To Floor**, **Direction**
-   (Up/Down), **Connected staircase** and optional **Travel orientation**, then
-   click **Apply activator**. The staircase must belong to From Floor; an unlinked
-   zone is also allowed. Changing From Floor moves the zone to that floor without
-   changing its geometry. From and To must be different existing floors, and Up
-   must lead higher while Down leads lower.
-3. Follow the zone's arrow: its tail is the source entry, its head the destination
-   exit. Auto orientation is bottom-to-top for Up and top-to-bottom for Down before
-   rotation/mirroring. The orientation override changes the direction of travel,
-   not which floor is higher. Position, size and rotation use ordinary properties
-   and handles; nudging, grouping, duplication, deletion and Undo/Redo also work.
-4. On the destination floor, place a separate return activator with reversed
-   From/To and direction. Use separate rectangles for Double Stair flights and
-   separate stairs; multiple activators can connect the same pair of floors.
-   Avoid contradictory overlapping zones on the same source floor.
-5. **Show Floor Activators** hides/shows the translucent rectangles, F1 → F2 labels
-   and arrows. Hidden zones cannot be selected or snapped to; this editor setting
-   does not disable their runtime behavior. **Activator enabled** disables an
-   individual transition. Zones never render in the normal app or vector exports.
+1. Create the connected floors using **Add floor** or **Floor Done → next**.
+   Floor counts and connection choices are dynamic; there is no two-floor limit.
+2. Place a **Stair** or **Double Stair** on a numbered building floor. Its invisible
+   usable walking area is automatic: the full tread area for a single Stair,
+   or one area for each Double Stair flight, excluding the central divider and
+   shared landing. There is no separate activation-area object or drawing tool.
+3. Select the stair and configure **From Floor**, **To Floor** and **Direction:
+   Up / Down** in **Stair floor transition**. The default To Floor is adjacent
+   in that direction; an unavailable floor means no active connection. Explicit
+   targets must exist and agree with the direction. Changing From Floor moves
+   the stair to that floor without changing its geometry. Click **Apply stair settings**.
+4. Double Stairs expose a separate **Right flight To Floor**, direction and enabled
+   setting. For example, one Floor 2 flight can descend to Floor 1 and the other
+   ascend to Floor 3. Configure each floor's stair section separately, never a
+   single object claiming to transition through every floor in one interaction.
+5. **Stair speed multiplier** is optional (0.25–1.0). Blank inherits the player's
+   stair-speed setting. Enabling/disabling a flight's transition is independent
+   from its wall/railing collision. Moving, resizing, rotating or mirroring the
+   stair immediately changes its derived activation area. No attachment is needed.
 6. Save the building/map and use **Run evacuation demo** for a full transition test.
    **Test walk** remains an active-layer collision test, not a multi-floor simulation.
 
-Enter at the source end, not from the middle or side. Progress through the zone
-continuously blends source/destination visibility from 0–100%; turning back halfway
-reverses it smoothly. Reaching the far end commits the destination. After completion,
-leave overlapping zones by more than 3 local drawing units before re-entering a
-return zone. This small edge tolerance prevents repeated toggling at a shared landing.
+Enter at the stair arrow's tail: Up travels bottom-to-top, Down top-to-bottom
+before rotation/mirroring. Spawning or side-entry halfway is not a valid source
+entry. Progress continuously blends source/destination visibility from 0–100%;
+turning back halfway reverses it smoothly. Reaching the far end commits the
+destination. After completion, all stair connections stay disarmed until the
+player's entire collision circle leaves the completed and overlapping destination
+stair footprints, including the Double Stair landing, plus a 3-map-unit anti-jitter
+margin. Walking across the landing cannot bounce floors. Re-entry must be intentional.
+Only current-floor stair connections are candidates; an active transition exclusively
+owns its flight until completion or cancellation. Runtime phases are ON_FLOOR,
+ENTERING_STAIRS, TRANSITIONING, ARRIVED and WAIT_FOR_EXIT. A path crossing a disarmed
+flight while exiting is not replayed after rearming. Swept source/end crossings
+also detect stair areas thinner than a movement substep.
 Only player navigation updates the transition, never object editing or other objects.
 No teleport, scene load, viewer replacement or camera reset occurs.
 
 Collision and opacity use this same transition. Before entry, only source-floor
 barriers apply. During a partial blend, both source and destination barriers apply,
-and movement stays within the zone's lateral stair corridor until an end is reached.
+and movement stays within the flight's lateral stair corridor until an end is reached.
 After completion, only destination-floor barriers apply. Author a clear, aligned
 stair corridor and landings on both floors: a wall across either corridor will block
 travel instead of becoming an invisible walk-through. Hidden unrelated upper floors
 do not obstruct the ground-floor player. Non-fading floor objects still participate
 in the overall floor blend; non-fading roof objects retain their separate behavior.
 
-Stair links are stored separately from manual groups/attachments. Linking alone does
-not group or move the zone with its stair; select/group both to move them together.
-Deleting a linked stair disables and unlinks its activator; reconnect it or deliberately
-enable it as an unlinked zone. Copying a stair and zone together remaps their connection.
-Copying a zone alone to another floor disables a link that no longer exists there.
-Copy previous floor adjusts the activator destinations upward and requires those
-destination floors to exist. Removing a floor removes activators that lead to it and
-renumbers surviving connections. These operations support Undo/Redo.
+Stair settings save/load on the stair object itself. No invisible zone can become
+accidentally selected, grouped or left behind. Deleting a stair removes its transition;
+Undo restores both. Duplication preserves connections. Pasting/copying to another
+floor updates From/To; deleting a floor disables flights targeting it and renumbers
+the surviving connections, without redirecting a disabled flight unexpectedly.
 
-Older map files still load unchanged. They do **not** receive guessed activation
-areas: manually add zones to existing stairs to enable their floor transitions.
+Older saved files import through a one-way conversion: old linked/overlapping zones
+become connections on the matching stair flight, and all old zone objects/fields
+are removed from the loaded document. Conflicting connections fail safely rather
+than silently dropping a route. Saving writes only stair-owned data. The normal
+app has no old-zone trigger path or editor imports. Unmatched old zones produce
+import diagnostics and require configuring the relevant stair manually.
 
 This is a layered 2D prototype, not a 3D structural/falling simulation. Floors need
 properly authored walls, landings and railings; safety routes need school validation.
@@ -293,7 +297,7 @@ increasing the width never places collision across the doorway. Railings retain
 rounded physical ends. Stairs can optionally block along their left/right sides
 and the Double Stair divider, with open ends and walkable treads. Set a stair's
 Collision Thickness or enable Blocks player and Apply properties to add those
-barriers. Stair movement and Floor Activators remain separate systems.
+barriers. Physical collision thickness is independent of the stair's floor connection.
 
 Older JSON maps without a collision-thickness value keep their previous wall/rail
 collision and non-blocking stair behavior. Editing visual wall/rail properties
@@ -377,6 +381,44 @@ behind walls and symbols. **Ctrl+D** duplicates, **Ctrl+Z** undoes, and **Ctrl+Y
 railings and imports together. These shortcuts leave focused text fields to their
 normal text editing and are disabled during test walking or file dialogs.
 
+## Player speed and gameplay performance
+
+In the main app or evacuation demo, use **Select player** to open **Player Speed**.
+The default is **120 map units/second**, reduced from 300. Use the slider or submit
+a numeric value from 10–600. **Stair speed multiplier** defaults to **0.65** (65% of
+walking speed), adjustable from 0.25–1.0. It applies on a stair footprint and during
+an active transition, including when entering stairs partway through a frame.
+Appearance, collision radius and speed remain independent. **Save player settings**
+persists all of them; older size/radius-only files load the new speed defaults
+without rewriting the file. Editor/demo handoff preserves unsaved settings too.
+
+Normal gameplay targets 60 updates/second, using measured elapsed time rather
+than fixed pixels per tick. Delayed frames up to half a second retain elapsed time
+and integrate bounded physics/camera steps, with one UI submission per frame.
+Longer window-suspension/debugger pauses are discarded to prevent resume teleports.
+The deadline scheduler includes update cost instead of adding another full sleep
+after every update. The camera interpolates toward the player, trails slightly,
+settles after stopping, and uses a viewport visibility guard. Zoom, rotation and
+building dimensions do not change while following.
+
+Building transforms, stair footprints, derived flight connections and collision geometry are
+compiled once per loaded scene. Spatial indices limit entry, collision, roof and
+stair work to nearby objects; during transitions only the owning flight updates.
+The renderer touches only the active/previous floor layers and nearby fading roofs.
+Camera changes update a retained root transform, not rebuilt map geometry.
+Locked editor Test walk likewise moves a retained dot/preview and uses a cached
+collision index, rather than refreshing every object/property per tick.
+
+For a repeatable Python/Flet-patch stress profile, run:
+
+```powershell
+python tests/benchmark_navigation.py --buildings 200 --floors 20 --ticks 60 --speed 300
+```
+
+This measures simulation and real Flet object-diff work, not native display FPS
+or GPU painting. Regression tests cover timing, batching, cache reuse, thin zones,
+floor locks and synchronized visibility/collision.
+
 ## Saving, older drafts and exports
 
 - **Save map** writes the full editable scene to `src/assets/map_workspace.json`.
@@ -425,7 +467,7 @@ See [interaction performance](EDITOR_PERFORMANCE.md) for details and profiling.
 - `map/interaction.py`: editor-only retained drag/resize/draw updates and gesture caches.
 - `map/railing_editor.py`: live thickness controls and gesture-based undo.
 - `map/collision_editor.py`: live physical thickness editing and collision previews.
-- `map/activator_editor.py`: editor-only floor-zone inspector, labels and arrows.
+- `map/stair_editor.py`: stair-owned floor connections and selection-only flight guides.
 - `map/scene.py`: campus/building layers, geometry projection and scene validation.
 - `map/scene_renderer.py`: image layers, editable vectors and collision guides.
 - `map/reference_layers.py`: editor-only ghost floors and visibility preferences.
@@ -434,11 +476,12 @@ See [interaction performance](EDITOR_PERFORMANCE.md) for details and profiling.
 - `map/free_build.py`: automatic bounds fitting and locked alignment-coordinate proxies.
 - `map/selection.py`: structural selection, multi-object operations and ID remapping.
 - `map/world_renderer.py`: retained player-facing floor/roof layers.
-- `navigation/world.py`, `navigation/activators.py`: player-only floor transitions,
+- `navigation/world.py`, `navigation/stairs.py`: player-only floor transitions,
   edge handling and synchronized visibility/collision, without editor imports.
 - `navigation/stairs.py`: reusable stair flight geometry and direction indicators.
 - `map/scene_store.py`: explicit editable scene persistence.
 - `drafting/models.py`, `drafting/handles.py`: reusable drafting geometry/history.
+- `drafting/migrations.py`: one-way legacy import, without a competing runtime system.
 - `navigation/collision.py`: movement collision shared by editor and player demo.
 - `spatial.py`: deterministic bounding-box lookup for openings and alignment candidates.
 - `navigation/app.py`: player demo using the same scene and floor objects.

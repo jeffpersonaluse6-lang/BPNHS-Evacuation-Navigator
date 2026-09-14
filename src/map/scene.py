@@ -96,6 +96,7 @@ class MapScene(DraftDocument):
         if CAMPUS not in loaded.floors: raise ValueError("Missing campus layer")
         scene=cls()
         scene.name,scene.width,scene.height,scene.floors=loaded.snapshot()
+        scene.migration_notes=getattr(loaded,"migration_notes",())
         # Stored layers bound work to actual data, not an arbitrary limit.
         # Legacy maps may have up to 12 empty layers from the old limit.
         for building in scene.buildings():
@@ -117,10 +118,6 @@ class MapScene(DraftDocument):
                 if parent is None or not (layer=="Roof" or valid_floor):
                     raise ValueError("Unknown building floor layer")
             for item in items:
-                if item.kind=="floor_activator":
-                    from navigation.activators import valid
-                    if parent is None or not scope.split(":",1)[-1].startswith("Floor ") or not valid(item,int(scope.split()[-1]),parent.floor_count,items,configuration=True):
-                        raise ValueError("Floor Activator must belong to its From Floor and connect valid floors/stairs in that building")
                 if item.parent_id and item.parent_id not in valid_ids:
                     raise ValueError("Attachment parent must belong to the same floor / building")
                 seen={item.id}; ancestor=item.parent_id
@@ -129,6 +126,8 @@ class MapScene(DraftDocument):
                     seen.add(ancestor); ancestor=parents[ancestor]
                 if parent and scope.split(":",1)[1].startswith("Floor ") and item.kind in {"stairs","double_stairs"}:
                     source=int(scope.split()[-1])
+                    if item.stair_from is not None and item.stair_from!=source:
+                        raise ValueError("Stair From Floor must match its stored floor layer")
                     for direction,target in ((item.stair_direction,item.stair_to),(item.stair_right_direction,item.stair_right_to)):
                         if target is not None and (target>parent.floor_count or target==source or
                                 (direction=="up")!=(target>source)):

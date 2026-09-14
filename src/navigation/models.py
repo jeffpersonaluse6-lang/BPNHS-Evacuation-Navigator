@@ -46,3 +46,5 @@ class NavigationState:
     joystick_y: float = 0.0
     player_size: float = 20.0
     collision_radius: float = 26.0
+    player_speed: float = 120.0
+    stair_speed_multiplier: float = .65

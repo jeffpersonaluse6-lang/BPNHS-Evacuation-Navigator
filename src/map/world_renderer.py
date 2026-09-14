@@ -12,11 +12,15 @@ class WorldMapView:
     def __init__(self,scene):
         self.scene=scene
         self.layers={}
+        self.parents={p.id:p for p in scene.buildings()}
+        self.previous_parent=None
+        self.floor_values={}
+        self.faded_roofs=set()
         controls=[ft.Container(width=scene.width,height=scene.height,bgcolor="#EDF8FA")]
         context=OpeningIndex(openings_for(scene.floors[CAMPUS]))
         for item in scene.floors[CAMPUS]:
             if item.kind!="building":
-                if item.kind not in {"entry_zone","floor_activator"}:
+                if item.kind!="entry_zone":
                     controls.append(cv.Canvas(width=scene.width,height=scene.height,
                         shapes=list(item_shapes(item,openings=context.for_wall(item)))))
                 continue
@@ -44,14 +48,14 @@ class WorldMapView:
         fade_shapes=[]
         solid_shapes=[]
         for item in items:
-            if item.kind in {"entry_zone","floor_activator"}: continue
+            if item.kind=="entry_zone": continue
             target=fade_shapes if item.fade_when_obstructing else solid_shapes
             target.extend(item_shapes(item,parent,openings=context.for_wall(item)))
         fade=ft.Container(opacity=1 if key in {1,"Roof"} else 0,
             animate_opacity=ft.Animation(140,ft.AnimationCurve.EASE_OUT) if roof else None,
             content=ft.Stack(width=self.scene.width,height=self.scene.height,controls=[base,
                 cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=fade_shapes)]))
-        solid=ft.Container(opacity=0,content=cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=solid_shapes))
+        solid=ft.Container(opacity=1 if key in {1,"Roof"} else 0,content=cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=solid_shapes))
         self.layers[parent.id,key]=(fade,solid)
         return [fade,solid]
 
@@ -59,12 +63,25 @@ class WorldMapView:
         dirty=[]
         def opacity(control,value):
             if control.opacity!=value:control.opacity=value;dirty.append(control)
-        for parent in self.scene.buildings():
-            for floor,alpha in navigator.floor_opacities(parent).items():
-                fade,solid=self.layers[parent.id,floor]
+        current=navigator.parent.id if navigator.parent else None
+        for pid in {self.previous_parent,current}-{None}:
+            values=navigator.active_floor_opacities() if pid==current else {1:1.}
+            previous=self.floor_values.get(pid,{1:1.})
+            for floor in previous.keys()|values.keys():
+                alpha=values.get(floor,0.)
+                if alpha==previous.get(floor,0.):continue
+                fade,solid=self.layers[pid,floor]
                 opacity(fade,alpha)
                 opacity(solid,alpha)
+            self.floor_values[pid]=values
+        self.previous_parent=current
+        nearby={p.id for p in navigator.roof_index.query(point)}
+        fading=set()
+        for pid in nearby|self.faded_roofs|({current} if current else set()):
+            parent=self.parents[pid]
             fade,solid=self.layers[parent.id,"Roof"]
-            opacity(fade,navigator.roof_opacity(parent,point))
-            opacity(solid,1)  # Explicitly non-fading roof objects remain visible.
+            value=navigator.roof_opacity(parent,point) if pid in nearby or pid==current else 1.
+            opacity(fade,value)
+            if value<1:fading.add(pid)
+        self.faded_roofs=fading
         return dirty

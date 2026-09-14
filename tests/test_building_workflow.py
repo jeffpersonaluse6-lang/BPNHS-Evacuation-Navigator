@@ -17,7 +17,7 @@ from map.scene_store import save_scene,load_scene
 from map.workspace_editor import MapWorkspaceEditor
 from map.selection import clone_bundle
 from navigation.collision import barriers_for
-from navigation.stairs import indicators,progress,connection
+from navigation.stairs import indicators,section_progress,transitions,connection
 from test_map_workspace import page_stub,pointer,keyboard
 
 
@@ -171,13 +171,10 @@ class BuildingWorkflowTests(unittest.TestCase):
         room=DraftItem("room",100,100,300,200,group_id="room-group")
         door=DraftItem("door",200,40,100,60,parent_id=room.id,group_id="room-group")
         stair=DraftItem("double_stairs",500,100,120,220,stair_to=2)
-        zone=DraftItem("floor_activator",500,100,55,220,activator_stair=stair.id)
         down=DraftItem("stairs",500,100,120,220,stair_direction="down",stair_to=1)
-        back=DraftItem("floor_activator",500,100,120,220,activator_from=2,activator_to=1,
-            stair_direction="down",activator_stair=down.id)
         rail=DraftItem("railing",100,400,400,0,stroke=14)
-        lower=[room,door,stair,zone,DraftItem("window",350,100,80,40),rail]
-        upper=[DraftItem("wall",100,100,300,0),down,back,DraftItem("opening",200,80,100,40)]
+        lower=[room,door,stair,DraftItem("window",350,100,80,40),rail]
+        upper=[DraftItem("wall",100,100,300,0),down,DraftItem("opening",200,80,100,40)]
         roof=[DraftItem("roof",100,100,500,300)]
         self.scene.floors.update({CAMPUS:[self.landmark,parent],scope_key(parent,"Floor 1"):lower,
             scope_key(parent,"Floor 2"):upper,scope_key(parent,"Roof"):roof})
@@ -329,7 +326,7 @@ class BuildingWorkflowTests(unittest.TestCase):
         self.assertEqual(barriers_for([up]),barriers_for([down]))
         for angle in (0,90,180,270):
             item=replace(up,rotation=angle)
-            p,inside,_=progress(item,0,item.local_to_world(40,80))
+            p,inside,_=section_progress(transitions(item,1,4)[0],item.local_to_world(40,80))
             self.assertAlmostEqual(p,.5)
             self.assertTrue(inside)
         double=replace(up,kind="double_stairs",width=120)

@@ -18,11 +18,12 @@ from .world import WorldNavigator
 from .camera import CameraViewport
 from .player_settings import PlayerSettings,load_player_settings
 from .player_controls import PlayerControls,player_collision_preview,update_collision_preview
+from .motion import MotionClock
 from map.world_renderer import WorldMapView
 
 
-MOVEMENT_TICK_SECONDS = 1 / 30
-MOVEMENT_SPEED = 300
+MOVEMENT_TICK_SECONDS = 1 / 60
+MOVEMENT_SPEED = 120  # Compatibility constant; live speed comes from player settings.
 
 
 class EvacuationApp:
@@ -42,9 +43,12 @@ class EvacuationApp:
             settings=PlayerSettings();self.settings_error=str(error)
         if settings.collision_radius>min(self.scene.width,self.scene.height)/2:
             self.settings_error="Saved collision radius does not fit this map; using the default radius."
-            settings=PlayerSettings(settings.visual_size)
+            from dataclasses import replace
+            settings=replace(settings,collision_radius=26)
         self.state.player_size=settings.visual_size
         self.state.collision_radius=settings.collision_radius
+        self.state.player_speed=settings.player_speed
+        self.state.stair_speed_multiplier=settings.stair_speed_multiplier
         self.navigator=WorldNavigator(self.scene,self.state)
         self.world_view=WorldMapView(self.scene)
         self.viewer: CameraViewport | None = None
@@ -223,13 +227,16 @@ class EvacuationApp:
         self.state.player_size=max(8,min(52,value))
         self._update_world()
 
-    def player_settings(self):return PlayerSettings(self.state.player_size,self.state.collision_radius)
+    def player_settings(self):return PlayerSettings(self.state.player_size,self.state.collision_radius,
+        self.state.player_speed,self.state.stair_speed_multiplier)
 
     def apply_player_settings(self,settings):
         if settings.collision_radius>min(self.scene.width,self.scene.height)/2:
             raise ValueError("Collision radius must fit inside the map.")
         self.state.player_size=settings.visual_size
         self.state.collision_radius=settings.collision_radius
+        self.state.player_speed=settings.player_speed
+        self.state.stair_speed_multiplier=settings.stair_speed_multiplier
         self.player_size_slider.value=settings.visual_size
         # Don't teleport on resize — even if the bigger circle overlaps a wall,
         # the next move will use the accurate new collision.
@@ -280,26 +287,38 @@ class EvacuationApp:
 
     async def _movement_loop(self):
         """Tick the movement loop while the joystick is held down."""
-        previous=time.perf_counter()
+        clock=MotionClock(time.perf_counter())
         while self.active:
-            await asyncio.sleep(MOVEMENT_TICK_SECONDS)
-            now=time.perf_counter();dt=min(.1,now-previous);previous=now
+            await asyncio.sleep(clock.delay(time.perf_counter(),MOVEMENT_TICK_SECONDS))
+            dt=clock.advance(time.perf_counter())
             if not self.state.move_mode and not self.follow_active:
                 continue
             self.movement_tick(dt)
 
     def movement_tick(self,dt):
-        if not self.active or not self.viewer or dt<=0 or (not self.state.move_mode and not self.follow_active):return
-        before=self._marker_center()
-        visible=self.viewer.camera.visible(before,self.state.player_size)
-        # Smoothly bring the camera back after the user panned away manually,
-        # before the player walks out of view.
-        if visible and self.state.move_mode:
-            dx=self.state.joystick_x*MOVEMENT_SPEED*dt
-            dy=self.state.joystick_y*MOVEMENT_SPEED*dt
-            if dx or dy:self.move_user(dx,dy)
+        if (not self.active or not self.viewer or not math.isfinite(dt) or dt<=0 or dt>.5
+                or (not self.state.move_mode and not self.follow_active)):return
+        # Integrate long frames in bounded simulation steps, but submit ONE UI
+        # patch per frame. Regular lag retains elapsed time; a suspended app
+        # deliberately discards its pause rather than teleporting on resume.
+        remaining=dt
+        visual_before=self.navigator.visual_state()
+        moved=False;camera_changed=False
+        while remaining>1e-9:
+            step=min(1/120,remaining);remaining-=step
+            before=self._marker_center()
+            visible=self.viewer.camera.visible(before,self.state.player_size)
+            if visible and self.state.move_mode and (self.state.joystick_x or self.state.joystick_y):
+                x,y=self.navigator.walk(before,self.state.joystick_x,self.state.joystick_y,step)
+                self.state.marker_x,self.state.marker_y=x-MARKER_SIZE/2,y-MARKER_SIZE/2
+            after=self._marker_center();moving=after!=before;moved=moved or moving
+            camera_changed=self.viewer.camera.follow(after,step,moving=moving,
+                diameter=self.state.player_size,guard=visible) or camera_changed
+        if camera_changed:self.viewer.apply(False)
+        if moved or self.navigator.visual_state()!=visual_before:
+            self._update_world([self.viewer.scene] if camera_changed else [])
+        elif camera_changed:self.page.update(self.viewer.scene)
         after=self._marker_center()
-        self.viewer.follow(after,dt,moving=after!=before,diameter=self.state.player_size,guard=visible)
         if not self.state.move_mode:
             screen=self.viewer.camera.screen(after)
             if math.hypot(screen[0]-self.viewer.camera.width/2,screen[1]-self.viewer.camera.height/2)<.05:
@@ -316,19 +335,21 @@ class EvacuationApp:
         self._update_world()
         return before!=(self.state.building_name,self.state.floor)
 
-    def _update_world(self):
+    def _update_world(self,extra_dirty=()):
         self.active_parent=self.navigator.parent
         center=self._marker_center()
-        dirty=self.world_view.update(self.navigator,center)
+        dirty=list(extra_dirty)+self.world_view.update(self.navigator,center)
+        camera_dirty=self.viewer is not None and self.viewer.scene in extra_dirty
+        if camera_dirty:dirty=list(extra_dirty)  # Root patch already includes changed map children.
         if self.marker:
             size=self.state.player_size
             self.marker.left,self.marker.top=center[0]-size/2,center[1]-size/2
             self.marker.width=self.marker.height=size
             self.marker.border_radius=size/2
-            dirty.append(self.marker)
-        if hasattr(self,"collision_preview"):
+            if not camera_dirty:dirty.append(self.marker)
+        if hasattr(self,"collision_preview") and (self.player_selected or self.collision_preview.visible):
             update_collision_preview(self.collision_preview,center,self.state.collision_radius,self.player_selected)
-            dirty.append(self.collision_preview)
+            if not camera_dirty:dirty.append(self.collision_preview)
         message="Walking on campus. Walk through a building doorway to enter."
         if self.active_parent:
             message=f"{self.active_parent.text} · Floor {self.state.floor}"

@@ -253,7 +253,8 @@ def move_with_collisions(x,y,dx,dy,radius,barriers,width,height):
     sx,sy = dx/steps,dy/steps
 
     def allowed(px,py):
-        return not any(barrier.blocks(px,py,radius) for barrier in barriers)
+        nearby=barriers.query((px,py),padding=radius) if hasattr(barriers,"query") else barriers
+        return not any(barrier.blocks(px,py,radius) for barrier in nearby)
 
     def clamp(value,limit):
         return max(radius,min(limit-radius,value))

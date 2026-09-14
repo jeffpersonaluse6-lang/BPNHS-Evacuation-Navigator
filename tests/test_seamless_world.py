@@ -30,11 +30,6 @@ class SeamlessWorldTests(unittest.TestCase):
         self.scene.floors[scope_key(self.parent,"Floor 2")]=[self.down,replace(self.up,id="up23",x=500)]
         self.scene.floors[scope_key(self.parent,"Floor 3")]=[replace(self.down,id="down32",x=500),replace(self.up,id="up34",x=800)]
         self.scene.floors[scope_key(self.parent,"Floor 4")]=[replace(self.down,id="down43",x=800)]
-        for source in range(1,5):
-            items=self.scene.floors[scope_key(self.parent,f"Floor {source}")]
-            items.extend(DraftItem("floor_activator",i.x,i.y,i.width,i.height,activator_from=source,
-                activator_to=source+(1 if i.stair_direction=="up" else -1),stair_direction=i.stair_direction,
-                activator_stair=i.id,blocking=False) for i in tuple(items))
 
     def navigator(self):
         state=NavigationState()

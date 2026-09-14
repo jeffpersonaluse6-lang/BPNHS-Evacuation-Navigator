@@ -9,7 +9,7 @@ import uuid
 from .roof import roof_seams
 
 KINDS = {"room", "rectangle", "floor", "ellipse", "wall", "line", "door", "double_door",
-         "opening", "window", "stairs", "double_stairs", "text", "dimension", "roof", "railing", "building", "entry_zone", "floor_activator"}
+         "opening", "window", "stairs", "double_stairs", "text", "dimension", "roof", "railing", "building", "entry_zone"}
 
 
 @dataclass(frozen=True)
@@ -48,11 +48,10 @@ class DraftItem:
     floor_origin_x: float = 0
     floor_origin_y: float = 0
     free_build: bool = False
-    activator_from: int = 1
-    activator_to: int = 2
-    activator_stair: str | None = None
-    activator_axis: str = "auto"
-    activator_enabled: bool = True
+    stair_from: int | None = None
+    stair_enabled: bool = True
+    stair_right_enabled: bool = True
+    stair_speed_multiplier: float | None = None
     # Physical collision width; None uses legacy defaults.
     collision_thickness: float | None = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
@@ -150,8 +149,9 @@ def primitives(item):
         box(0,0,w,h,"#FFFFFF")
         landing = min(24,h/5) if item.kind == "double_stairs" else 0
         # Shade each tread individually, keeping outlines and landing intact.
+        gap=min(3,w/8)
         sections = [(0,w,item.stair_direction)] if not landing else [
-            (0,w/2-3,item.stair_direction),(w/2+3,w/2-3,item.stair_right_direction)]
+            (0,w/2-gap,item.stair_direction),(w/2+gap,w/2-gap,item.stair_right_direction)]
         for x,sw,direction in sections:
             for i in range(item.steps):
                 depth = (1-i/max(1,item.steps-1)) if direction=="up" else i/max(1,item.steps-1)
@@ -210,16 +210,13 @@ def validate_item(item):
     for value in (item.group_id,item.parent_id):
         if value is not None and (not isinstance(value,str) or not value or len(value)>80):
             raise ValueError("Invalid structure relationship")
-    if any(type(n) is not int or n<1 for n in (item.activator_from,item.activator_to)):
-        raise ValueError("Activator floors must be positive integers")
-    if item.activator_axis not in {"auto","up","down","left","right"}:
-        raise ValueError("Invalid activator travel orientation")
-    if type(item.activator_enabled) is not bool:raise ValueError("Invalid activator enabled flag")
-    if item.activator_stair is not None and (not isinstance(item.activator_stair,str) or not item.activator_stair or len(item.activator_stair)>80):
-        raise ValueError("Invalid connected staircase")
-    if item.kind=="floor_activator" and (item.activator_from==item.activator_to or
-            (item.stair_direction=="up")!=(item.activator_to>item.activator_from)):
-        raise ValueError("Activator destination must agree with its Up/Down direction")
+    if item.stair_from is not None and (type(item.stair_from) is not int or item.stair_from<1):
+        raise ValueError("Stair From Floor must be a positive floor number")
+    if type(item.stair_enabled) is not bool or type(item.stair_right_enabled) is not bool:
+        raise ValueError("Stair transition enabled must be a boolean")
+    if item.stair_speed_multiplier is not None and (type(item.stair_speed_multiplier) not in (int,float)
+            or not math.isfinite(item.stair_speed_multiplier) or not .25<=item.stair_speed_multiplier<=1):
+        raise ValueError("Stair speed multiplier must be between 0.25 and 1")
     if item.stair_direction not in {"up","down"} or item.stair_right_direction not in {"up","down"}:
         raise ValueError("Stair direction must be up or down")
     for target in (item.stair_to,item.stair_right_to):
@@ -295,7 +292,10 @@ class DraftDocument:
         raw=json.loads(data)
         if not isinstance(raw,dict) or raw.get("format")!="bpnhs-draft" or raw.get("version")!=1:
             raise ValueError("Not a supported BPNHS draft file")
+        from .migrations import migrate_stair_data
+        raw,notes=migrate_stair_data(raw)
         doc=cls()
+        doc.migration_notes=notes
         for dimension in ("width","height"):
             value=raw.get(dimension)
             if type(value) not in (int,float) or not math.isfinite(value) or not 100<=value<=5000:
