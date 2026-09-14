@@ -38,22 +38,22 @@ class FloorReentryTests(unittest.TestCase):
         points=((222,405),(222,400),(222,237),(222,74)) if self.flight.direction=="up" else (
             (222,69),(222,74),(222,237),(222,400))
         self.visit(*points)
-        self.assertEqual(self.nav.state.floor,self.flight.target);self.assertIsNone(self.nav.travel)
+        self.assertEqual(self.nav.state.floor,self.flight.target);self.assertIsNone(self.nav.transition)
 
     def test_neighboring_double_stair_flight_cannot_reverse_on_same_landing(self):
         self.setup_stairs();self.complete()
         for _ in range(20):
             self.visit((222,69),(292,69),(292,74),(292,237),(292,400))
-            self.assertEqual(self.nav.state.floor,2);self.assertIsNone(self.nav.travel)
+            self.assertEqual(self.nav.state.floor,2);self.assertIsNone(self.nav.transition)
             self.assertFalse(self.nav.stair_armed(self.reverse))
 
     def test_full_exit_then_intentional_reentry_allows_exactly_one_descent(self):
         self.setup_stairs();self.complete();self.visit((292,20))
         self.assertTrue(self.nav.stair_armed(self.reverse))
         self.visit((292,74),(292,237),(292,400))
-        self.assertEqual(self.nav.state.floor,1);self.assertIsNone(self.nav.travel)
+        self.assertEqual(self.nav.state.floor,1);self.assertIsNone(self.nav.transition)
         self.visit((222,405),(222,400),(222,74))
-        self.assertEqual(self.nav.state.floor,1);self.assertIsNone(self.nav.travel)
+        self.assertEqual(self.nav.state.floor,1);self.assertIsNone(self.nav.transition)
 
     def test_center_outside_stair_is_not_exit_while_player_body_overlaps(self):
         self.setup_stairs();self.complete();self.visit((292,40),(292,22))
@@ -63,17 +63,17 @@ class FloorReentryTests(unittest.TestCase):
     def test_active_transition_exclusively_owns_current_floor_flight(self):
         self.setup_stairs();self.visit((222,405),(222,400),(222,237))
         self.assertEqual(self.nav.state.floor,1);self.assertEqual(self.nav.candidates(),(self.flight,))
-        self.assertIsNone(self.nav.starting_section((292,74)))
+        self.assertIsNone(self.nav.detect_stair_entry((292,74)))
         self.assertFalse(self.nav.stair_armed(self.reverse));self.assertFalse(self.nav.stair_armed(self.flight))
 
     def test_high_floor_pair_uses_same_exit_reentry_logic(self):
         self.setup_stairs(source=17,target=18);self.complete();self.visit((292,69),(292,74),(292,400))
-        self.assertEqual(self.nav.state.floor,18);self.assertIsNone(self.nav.travel)
+        self.assertEqual(self.nav.state.floor,18);self.assertIsNone(self.nav.transition)
         self.visit((292,20),(292,74),(292,400));self.assertEqual(self.nav.state.floor,17)
 
     def test_descending_transition_disarms_upward_return_until_exit(self):
         self.setup_stairs(source=4,target=3);self.complete();self.visit((292,405),(292,400),(292,74))
-        self.assertEqual(self.nav.state.floor,3);self.assertIsNone(self.nav.travel)
+        self.assertEqual(self.nav.state.floor,3);self.assertIsNone(self.nav.transition)
         self.visit((292,440),(292,405),(292,400),(292,74));self.assertEqual(self.nav.state.floor,4)
 
     def test_rotated_mirrored_nonuniform_building_exit_is_in_world_units(self):

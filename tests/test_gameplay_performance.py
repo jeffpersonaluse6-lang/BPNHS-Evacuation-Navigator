@@ -166,7 +166,7 @@ class StairStatePerformanceTests(unittest.TestCase):
         # This segment crosses the down zone while leaving, but it was locked
         # when the segment started. The crossing must not be replayed.
         f.visit((550,400))
-        self.assertEqual(f.nav.state.floor,2);self.assertIsNone(f.nav.travel)
+        self.assertEqual(f.nav.state.floor,2);self.assertIsNone(f.nav.transition)
 
     def test_normal_and_stair_speed_are_frame_independent(self):
         for ticks in (10,30,60):
@@ -184,7 +184,7 @@ class StairStatePerformanceTests(unittest.TestCase):
         n.enter(f.parent)
         point=f.scene.project(scope_key(f.parent,"Floor 1"),222,105)
         n.move(point,0,-10)
-        self.assertEqual(n.state.floor,2);self.assertIsNone(n.travel)
+        self.assertEqual(n.state.floor,2);self.assertIsNone(n.transition)
 
     def test_distant_same_floor_stairs_do_not_run_progress_checks(self):
         f=self.fixture();items=f.scene.floors[scope_key(f.parent,"Floor 1")]

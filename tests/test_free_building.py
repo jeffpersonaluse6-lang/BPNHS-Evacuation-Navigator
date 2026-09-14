@@ -307,8 +307,8 @@ class FreeBuildingTests(unittest.TestCase):
         b.items().append(replace(up,id="return-stairs",stair_direction="down"))
         parent=self.commit();nav=WorldNavigator(self.scene,NavigationState())
         nav.update((2140,961));nav.update((2140,959))
-        self.assertIsNotNone(nav.travel)
-        nav.update((2140,880));self.assertAlmostEqual(nav.travel.progress,.5)
+        self.assertIsNotNone(nav.transition)
+        nav.update((2140,880));self.assertAlmostEqual(nav.transition.progress,.5)
         nav.update((2140,800));self.assertEqual(nav.state.floor,2)
         self.assertEqual(self.scene.project(scope_key(parent,"Floor 2"),2140,800),(2140,800))
 

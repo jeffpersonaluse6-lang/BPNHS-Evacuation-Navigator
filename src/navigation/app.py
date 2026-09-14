@@ -353,9 +353,9 @@ class EvacuationApp:
         message="Walking on campus. Walk through a building doorway to enter."
         if self.active_parent:
             message=f"{self.active_parent.text} · Floor {self.state.floor}"
-            if self.navigator.travel:
-                travel=self.navigator.travel
-                message=f"{self.active_parent.text} · Floor {travel.source} → {travel.target} · stairs {travel.progress:.0%}"
+            if self.navigator.transition:
+                t=self.navigator.transition
+                message=f"{self.active_parent.text} · Floor {t.source} → {t.target} · stairs {t.progress:.0%}"
         self.state.status=message
         if self.status_text and self.status_text.value!=message:
             self.status_text.value=message;dirty.append(self.status_text)

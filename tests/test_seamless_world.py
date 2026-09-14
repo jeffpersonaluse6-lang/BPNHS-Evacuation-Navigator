@@ -45,7 +45,7 @@ class SeamlessWorldTests(unittest.TestCase):
         nav.update(self.position(250,300))
         for value in (0,.1,.25,.333,.5,.75,.913):
             nav.update(self.position(250,300-200*value))
-            self.assertAlmostEqual(nav.travel.progress,value)
+            self.assertAlmostEqual(nav.transition.progress,value)
             alpha=nav.floor_opacities(self.parent)
             self.assertAlmostEqual(alpha[1],1-value)
             self.assertAlmostEqual(alpha[2],value)
@@ -53,7 +53,7 @@ class SeamlessWorldTests(unittest.TestCase):
             self.assertEqual(alpha[4],0)
         nav.update(self.position(250,100))
         self.assertEqual(nav.state.floor,2)
-        self.assertIsNone(nav.travel)
+        self.assertIsNone(nav.transition)
 
     def test_descending_and_reversing_midway(self):
         nav=self.navigator();nav.state.floor=2
@@ -62,7 +62,7 @@ class SeamlessWorldTests(unittest.TestCase):
         self.assertAlmostEqual(nav.floor_opacities(self.parent)[1],.25)
         self.assertAlmostEqual(nav.floor_opacities(self.parent)[2],.75)
         nav.update(self.position(250,125))
-        self.assertAlmostEqual(nav.travel.progress,.125)
+        self.assertAlmostEqual(nav.transition.progress,.125)
         nav.update(self.position(250,300))
         self.assertEqual(nav.state.floor,1)
 
@@ -73,7 +73,7 @@ class SeamlessWorldTests(unittest.TestCase):
             nav.update(self.position(x,310))
             nav.update(self.position(x,300))
             nav.update(self.position(x,200))
-            self.assertEqual(nav.travel.target,source+1)
+            self.assertEqual(nav.transition.target,source+1)
             nav.update(self.position(x,100))
             self.assertEqual(nav.state.floor,source+1)
 
@@ -136,12 +136,12 @@ class SeamlessWorldTests(unittest.TestCase):
             scope=scope_key(parent,"Floor 1")
             nav.update(self.scene.project(scope,250,300))
             nav.update(self.scene.project(scope,250,200))
-            self.assertAlmostEqual(nav.travel.progress,.5)
+            self.assertAlmostEqual(nav.transition.progress,.5)
 
     def test_stairs_cannot_be_triggered_by_stepping_directly_into_middle(self):
         nav=self.navigator()
         nav.update(self.position(250,200))
-        self.assertIsNone(nav.travel)
+        self.assertIsNone(nav.transition)
         self.assertEqual(nav.state.floor,1)
 
     def test_floor_transition_does_not_render_again_or_stop_held_input(self):

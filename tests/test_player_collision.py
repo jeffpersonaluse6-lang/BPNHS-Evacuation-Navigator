@@ -228,14 +228,14 @@ class WorldRadiusTests(unittest.TestCase):
         self.assertTrue(nav.allowed(scene.project(scope,350,220)))
 
     def test_radius_change_updates_collision_on_both_floors_mid_transition(self):
-        from navigation.world import FloorTravel
+        from navigation.world import FloorTransition
         parent=DraftItem("building",0,0,1436,751,floor_count=2)
         stair=DraftItem("stairs",150,100,100,200)
         scene=MapScene();scene.floors[CAMPUS]=[parent]
         scene.floors[scope_key(parent,"Floor 1")]=[stair]
         scene.floors[scope_key(parent,"Floor 2")]=[DraftItem("wall",220,100,0,200,stroke=4)]
         state=NavigationState(collision_radius=8);nav=WorldNavigator(scene,state);nav.enter(parent)
-        nav.travel=FloorTravel(nav.candidates()[0],1,2,.5)
+        nav.transition=FloorTransition(nav.candidates()[0],1,2,.5)
         self.assertTrue(nav.allowed((200,200)))
         state.collision_radius=20;self.assertFalse(nav.allowed((200,200)))
 

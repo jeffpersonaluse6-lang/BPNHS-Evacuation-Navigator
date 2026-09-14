@@ -10,6 +10,9 @@ from .stairs import STAIR_KINDS,transitions,section_progress as progress
 from .runtime_cache import RuntimeIndex,FloorTransform,polygon_distance
 
 
+TRANSITION_THRESHOLD=0.05
+
+
 class TransitionPhase(str,Enum):
     ON_FLOOR="ON_FLOOR"
     ENTERING_STAIRS="ENTERING_STAIRS"
@@ -19,7 +22,7 @@ class TransitionPhase(str,Enum):
 
 
 @dataclass
-class FloorTravel:
+class FloorTransition:
     section: object
     source: int
     target: int
@@ -45,7 +48,7 @@ class WorldNavigator:
         self.scene,self.state=scene,state
         self.parents=tuple(scene.buildings())
         self.parent=None
-        self.travel=None
+        self.transition=None
         self.previous_point=None
         self.previous_world_point=None
         self.phase=TransitionPhase.ON_FLOOR
@@ -120,20 +123,20 @@ class WorldNavigator:
 
     def enter(self,parent):
         self.parent=parent
-        self.travel=None
+        self.transition=None
         self.previous_point=None
         self.previous_world_point=None
         self.phase=TransitionPhase.ON_FLOOR
         self.exit_areas=();self.wait_floor=None
         self.locked_sections.clear()
-        self.state.view="floor"  # Just a label — the map doesn't actually change.
+        self.state.view="floor"
         self.state.building_name=parent.opens or parent.id
         self.state.floor=1
         self.state.stair_armed=True
 
     def exit(self):
         self.parent=None
-        self.travel=None
+        self.transition=None
         self.previous_point=None
         self.previous_world_point=None
         self.phase=TransitionPhase.ON_FLOOR
@@ -145,17 +148,17 @@ class WorldNavigator:
         self.state.stair_armed=True
 
     def candidates(self):
-        if self.travel is not None:
-            return (self.travel.section,) if self.travel.source==self.state.floor else ()
+        if self.transition is not None:
+            return (self.transition.section,) if self.transition.source==self.state.floor else ()
         return self.connections.get((self.parent.id,self.state.floor),()) if self.parent else ()
 
     def stair_armed(self,zone):
-        return (self.parent is not None and self.travel is None
+        return (self.parent is not None and self.transition is None
             and zone.source==self.state.floor and zone.id not in self.locked_sections
             and not self.exit_areas)
 
     def nearby_candidates(self,point,previous=None):
-        if self.travel:return (self.travel.section,)
+        if self.transition:return (self.transition.section,)
         index=self.section_indices.get((self.parent.id,self.state.floor)) if self.parent else None
         return index.query(point,previous,padding=1e-7) if index else ()
 
@@ -179,8 +182,6 @@ class WorldNavigator:
         self.phase=TransitionPhase.ARRIVED
 
     def rearm_after_exit(self,point):
-        # Exit is spatial, not timed. The entire physical player circle must
-        # clear the stair footprint plus a small anti-jitter margin.
         radius=self.state.collision_radius+3
         if not self.exit_areas:return False
         if self.wait_floor!=self.state.floor or not any(area.blocks(*point,radius) for area in self.exit_areas):
@@ -190,10 +191,11 @@ class WorldNavigator:
         self.phase=TransitionPhase.WAIT_FOR_EXIT
         return False
 
-    def starting_section(self,local):
-        if self.travel is not None or self.exit_areas:return None
+    def detect_stair_entry(self,local):
+        """Find the first armed stair zone the player is entering from the start end."""
+        if self.transition is not None or self.exit_areas:return None
         point=self.transforms[self.parent.id].project(*local) if self.parent else local
-        ENTRY_BAND=0.08
+        ENTRY_BAND=TRANSITION_THRESHOLD
         for zone in self.nearby_candidates(point,self.previous_world_point):
             if not self.stair_armed(zone):continue
             p,lateral,raw=progress(zone,local)
@@ -210,6 +212,7 @@ class WorldNavigator:
                     end=tuple(a+(b-a)*end_fraction for a,b in zip(self.previous_point,local))
                     if not progress(zone,end)[1]:continue
                 return zone
+            if previous is not None and not (-ENTRY_BAND<=previous<=1+ENTRY_BAND) and 0<=raw<=1 and lateral:return zone
         return None
 
     def lock_overlapping(self,local):
@@ -229,66 +232,50 @@ class WorldNavigator:
             return before!=(self.state.building_name,self.state.floor)
         local=self.transforms[self.parent.id].unproject(*point)
         if self.rearm_after_exit(point):
-            # A zone crossed BEFORE clearing the stairs was still disarmed.
-            # Never retroactively trigger it from this frame's swept segment.
             self.previous_point=local;self.previous_world_point=point
             self.lock_overlapping(local)
         self.locked_sections.intersection_update(key for key in tuple(self.locked_sections)
             if self.sections_by_id[key].contains(*local,tolerance=8))
-        if self.travel:
-            travel=self.travel
-            p,lateral,raw=progress(travel.section,local)
-            if lateral:travel.progress=p
+        if self.transition:
+            t=self.transition
+            p,lateral,raw=progress(t.section,local)
+            if lateral:t.progress=p
             self.phase=TransitionPhase.TRANSITIONING
-            if lateral and raw>=1-1e-7:
-                self.finish_transition(travel,local)
-            elif raw<0 and lateral:
-                self.state.floor=travel.source
-                self.travel=None
+            if lateral and raw>=1-TRANSITION_THRESHOLD:
+                self.state.floor=t.target;self.transition=None
+                self.lock_overlapping(local)
+                self.wait_for_stair_exit(t)
+            elif not lateral or raw<-1e-9 or raw>1+1e-9:
+                self.state.floor=t.source;self.transition=None
                 self.lock_overlapping(local)
                 self.phase=TransitionPhase.ON_FLOOR
         else:
-            for candidate in (() if self.exit_areas else self.nearby_candidates(point,self.previous_world_point)):
-                p,lateral,raw=progress(candidate,local)
-                if not lateral or not 1e-7<raw<1-1e-7:continue
-                previous=progress(candidate,self.previous_point) if self.previous_point is not None else None
-                if previous is None or (not previous[1] and previous[2]>0):
-                    self.locked_sections.add(candidate.id)
-            zone=self.starting_section(local)
+            zone=self.detect_stair_entry(local)
             if zone:
-                self.travel=FloorTravel(zone,self.state.floor,zone.target,progress(zone,local)[0])
+                self.transition=FloorTransition(zone,self.state.floor,zone.target,progress(zone,local)[0])
                 self.phase=TransitionPhase.ENTERING_STAIRS
-                # A swept path can cross both ends of a very thin zone in one
-                # substep. Commit once, never silently miss that transition.
-                if progress(zone,local)[2]>=1-1e-7:self.finish_transition(self.travel,local)
         self.previous_point=local
         self.previous_world_point=point
-        self.state.stair_armed=self.travel is None and not self.exit_areas
-        if self.state.floor==1 and self.travel is None and not self.inside(self.parent,point): self.exit()
+        self.state.stair_armed=self.transition is None and not self.exit_areas
+        if self.state.floor==1 and self.transition is None and not self.inside(self.parent,point): self.exit()
         return before!=(self.state.building_name,self.state.floor)
 
-    def finish_transition(self,travel,local):
-        self.state.floor=travel.target;self.travel=None
-        self.lock_overlapping(local)
-        self.wait_for_stair_exit(travel)
-
     def active_floor_opacities(self):
-        """Only changed floors; the renderer remembers and clears old layers."""
         if self.parent is None:return {}
-        if self.travel:return {self.travel.source:1-self.travel.progress,self.travel.target:self.travel.progress}
+        if self.transition:return {self.transition.source:1-self.transition.progress,self.transition.target:self.transition.progress}
         return {self.state.floor:1.}
 
     def visual_state(self):
         return (self.parent.id if self.parent else None,self.state.floor,
-            (self.travel.section.id,self.travel.progress) if self.travel else None)
+            (self.transition.section.id,self.transition.progress) if self.transition else None)
 
     def floor_opacities(self,parent):
         result={n:0. for n in range(1,parent.floor_count+1)}
         if self.parent is None or self.parent.id!=parent.id:
             result[1]=1.
-        elif self.travel:
-            result[self.travel.source]=1-self.travel.progress
-            result[self.travel.target]=self.travel.progress
+        elif self.transition:
+            result[self.transition.source]=1-self.transition.progress
+            result[self.transition.target]=self.transition.progress
         else: result[self.state.floor]=1.
         return result
 
@@ -296,15 +283,11 @@ class WorldNavigator:
         floors={self.state.floor if self.parent else 1}
         if self.parent:
             local=self.transforms[self.parent.id].unproject(*point)
-            if self.travel:
-                p,lateral,raw=progress(self.travel.section,local)
-                # Stay in the stair corridor until we reach the end.
+            if self.transition:
+                p,lateral,raw=progress(self.transition.section,local)
                 if not lateral:return False
-                floors=({self.travel.source} if raw<=0 else {self.travel.target} if raw>=1 else
-                    {self.travel.source,self.travel.target})
-            else:
-                zone=self.starting_section(local)
-                if zone and progress(zone,local)[0]>0:floors.add(zone.target)
+                floors=({self.transition.source} if raw<=0 else {self.transition.target} if raw>=1 else
+                    {self.transition.source,self.transition.target})
         radius=self.state.collision_radius
         if 1 in floors and any(b.blocks(*point,radius) for b in self.ground_index.query(point,padding=radius)):return False
         for floor in floors:
@@ -335,8 +318,8 @@ class WorldNavigator:
 
     def walking_speed(self,point):
         speed=self.state.player_speed
-        if self.travel:
-            multiplier=self.travel.section.stair.stair_speed_multiplier
+        if self.transition:
+            multiplier=self.transition.section.stair.stair_speed_multiplier
             return speed*(self.state.stair_speed_multiplier if multiplier is None else multiplier)
         if self.parent:
             index=self.stair_indices.get((self.parent.id,self.state.floor))

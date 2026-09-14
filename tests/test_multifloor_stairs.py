@@ -40,10 +40,10 @@ class MultilevelStairTests(unittest.TestCase):
             tail=2000-(source-1)*80
             if source>1:nav.update((400,tail));nav.update((260,tail))
             nav.update((260,tail));nav.update((260,tail-20))
-            self.assertEqual((nav.travel.source,nav.travel.target),(source,source+1))
-            self.assertAlmostEqual(nav.travel.progress,.25)
+            self.assertEqual((nav.transition.source,nav.transition.target),(source,source+1))
+            self.assertAlmostEqual(nav.transition.progress,.25)
             self.assertEqual(set(nav.active_floor_opacities()),{source,source+1})
-            nav.update((260,tail-80));self.assertEqual(nav.state.floor,source+1);self.assertIsNone(nav.travel)
+            nav.update((260,tail-80));self.assertEqual(nav.state.floor,source+1);self.assertIsNone(nav.transition)
         self.assertEqual(nav.state.floor,20);self.assertEqual(nav.candidates()[0].target,19)
 
     def test_four_floor_descent_requires_each_stair_interaction_to_finish(self):
@@ -52,13 +52,13 @@ class MultilevelStairTests(unittest.TestCase):
         for source in (4,3,2):
             tail=2000-(source-1)*80
             if source<4:nav.update((400,tail));nav.update((260,tail))
-            nav.update((260,tail+20));self.assertEqual((nav.travel.source,nav.travel.target),(source,source-1))
-            nav.update((260,tail+80));self.assertEqual(nav.state.floor,source-1);self.assertIsNone(nav.travel)
+            nav.update((260,tail+20));self.assertEqual((nav.transition.source,nav.transition.target),(source,source-1))
+            nav.update((260,tail+80));self.assertEqual(nav.state.floor,source-1);self.assertIsNone(nav.transition)
 
     def test_one_continuous_move_cannot_chain_overlapping_stair_sections(self):
         scene,parent=stacked_sections(4);nav=WorldNavigator(scene,NavigationState())
         nav.move((260,2005),0,-245)
-        self.assertEqual(nav.state.floor,2);self.assertIsNone(nav.travel)
+        self.assertEqual(nav.state.floor,2);self.assertIsNone(nav.transition)
 
     def test_identical_overlapping_higher_flights_do_not_cascade(self):
         scene,parent=stacked_sections(6)
@@ -66,15 +66,15 @@ class MultilevelStairTests(unittest.TestCase):
             DraftItem("stairs",200,100,120,240,stair_from=floor,stair_to=floor+1)]
         nav=WorldNavigator(scene,NavigationState())
         for y in (345,340,220,100,100,99.8,100.2,99,120,200,300):nav.update((260,y))
-        self.assertEqual(nav.state.floor,2);self.assertIsNone(nav.travel)
+        self.assertEqual(nav.state.floor,2);self.assertIsNone(nav.transition)
         nav.update((400,345));nav.update((260,345));nav.update((260,340));nav.update((260,220))
-        self.assertEqual((nav.travel.source,nav.travel.target),(2,3))
+        self.assertEqual((nav.transition.source,nav.transition.target),(2,3))
 
     def test_only_current_floor_connections_are_candidates_above_floor_two(self):
         scene,parent=stacked_sections(20);nav=WorldNavigator(scene,NavigationState());nav.enter(parent);nav.state.floor=17
         self.assertEqual({s.source for s in nav.candidates()},{17})
         tail=2000-16*80;nav.update((260,tail));nav.update((260,tail-40))
-        self.assertEqual((nav.travel.source,nav.travel.target),(17,18))
+        self.assertEqual((nav.transition.source,nav.transition.target),(17,18))
 
     def test_number_of_floors_is_not_bounded_by_old_dropdown_limits(self):
         scene,parent=stacked_sections(520)

@@ -40,8 +40,8 @@ class AutomaticStairRuntimeTests(unittest.TestCase):
     def test_every_stair_has_automatic_connection_without_a_stored_zone(self):
         self.assertEqual(len(self.nav.candidates()),1)
         self.visit((260,345),(260,340),(260,220))
-        self.assertEqual((self.nav.travel.source,self.nav.travel.target),(1,2))
-        self.assertAlmostEqual(self.nav.travel.progress,.5)
+        self.assertEqual((self.nav.transition.source,self.nav.transition.target),(1,2))
+        self.assertAlmostEqual(self.nav.transition.progress,.5)
         self.visit((260,100));self.assertEqual(self.nav.state.floor,2)
         self.assertEqual(len(self.scene.floors[scope_key(self.parent,"Floor 1")]),1)
 
@@ -49,10 +49,10 @@ class AutomaticStairRuntimeTests(unittest.TestCase):
         self.visit((260,345),(260,340))
         for p in (0,.1,.333,.5,.8,.4,.2):
             self.visit((260,340-240*p))
-            self.assertAlmostEqual(self.nav.travel.progress,p)
+            self.assertAlmostEqual(self.nav.transition.progress,p)
             self.assertAlmostEqual(self.nav.active_floor_opacities()[2],p)
             self.assertEqual(self.nav.state.floor,1)
-        self.visit((260,345));self.assertIsNone(self.nav.travel)
+        self.visit((260,345));self.assertIsNone(self.nav.transition)
         self.assertEqual(self.nav.state.floor,1)
 
     def test_invalid_disabled_wrong_floor_or_outside_building_connections_never_trigger(self):
@@ -61,12 +61,12 @@ class AutomaticStairRuntimeTests(unittest.TestCase):
             self.scene.floors[scope_key(self.parent,"Floor 1")]=[changed]
             self.nav=WorldNavigator(self.scene,NavigationState());self.nav.enter(self.parent)
             self.visit((260,345),(260,340),(260,100))
-            self.assertEqual(self.nav.state.floor,1);self.assertIsNone(self.nav.travel)
+            self.assertEqual(self.nav.state.floor,1);self.assertIsNone(self.nav.transition)
 
     def test_spawning_or_entering_from_side_in_middle_is_not_stair_entry(self):
         self.visit((260,220),(260,330),(330,300),(260,300),(260,330))
-        self.assertIsNone(self.nav.travel)
-        self.visit((260,345),(260,340),(260,220));self.assertIsNotNone(self.nav.travel)
+        self.assertIsNone(self.nav.transition)
+        self.visit((260,345),(260,340),(260,220));self.assertIsNotNone(self.nav.transition)
 
     def test_double_stair_flights_have_independent_floor_connections(self):
         stair=replace(self.stair,kind="double_stairs",width=240,stair_to=2,
@@ -89,7 +89,7 @@ class AutomaticStairRuntimeTests(unittest.TestCase):
             for p in (-.02,0,.5,1):
                 point=stair.local_to_world(width/2,height*(1-p))
                 nav.update(self.scene.project(scope_key(self.parent,"Floor 1"),*point))
-                if p==.5:self.assertAlmostEqual(nav.travel.progress,.5)
+                if p==.5:self.assertAlmostEqual(nav.transition.progress,.5)
             self.assertEqual(nav.state.floor,2)
 
     def test_source_and_destination_collision_use_same_partial_transition(self):
