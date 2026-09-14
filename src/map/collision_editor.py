@@ -15,7 +15,7 @@ class CollisionEditor:
         self.slider=ft.Slider(min=1,max=200,divisions=199,value=2,label="{value}",
             on_change_start=self.start,on_change=self.change,on_change_end=self.end)
         self.control=ft.Column(visible=False,spacing=0,controls=[self.field,self.slider,
-            ft.Text("Use Blocks player to enable collision. Setting stair thickness adds side/divider barriers; both ends stay open.",size=11)])
+            ft.Text("Use Blocks player to enable collision. Stair thickness adds side barriers; both ends stay open. Circle Wall collision follows its curved rim.",size=11)])
 
     def sync(self,item,multiple):
         self.control.visible=bool(item and item.kind in COLLISION_KINDS)

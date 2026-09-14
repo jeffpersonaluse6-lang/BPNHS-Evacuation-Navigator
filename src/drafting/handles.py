@@ -1,6 +1,7 @@
 """Selection handles and resize/rotation math."""
 from dataclasses import replace
 import math
+from .circular import CIRCLE_KINDS
 
 def frame(item):
     return replace(item, mirrored=False)
@@ -51,6 +52,13 @@ def transform(item,handle,start,point,snap=0):
     if 'e' in handle: right=max(4,right+dx)
     if 'n' in handle: top=min(dy,bottom-4)
     if 's' in handle: bottom=max(4,bottom+dy)
+    if item.kind in CIRCLE_KINDS:
+        new_width,new_height=right-left,bottom-top
+        diameter=max(new_width,new_height) if len(handle)==2 else new_width if handle in {"e","w"} else new_height
+        if 'w' in handle:left=right-diameter
+        else:right=left+diameter
+        if 'n' in handle:top=bottom-diameter
+        else:bottom=top+diameter
     x,y=f.local_to_world(left,top)
     return replace(item,x=x,y=y,width=right-left,height=bottom-top)
 

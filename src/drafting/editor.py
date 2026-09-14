@@ -8,17 +8,21 @@ import flet as ft
 import flet.canvas as cv
 from .canvas import drawing_shapes
 from .models import DraftDocument, DraftItem, validate_item
+from .roof import ROOF_KINDS
+from .circular import CIRCLE_KINDS,diameter_values
 from .handles import hit_handle, transform, rotate_about_center
 from editor_shortcuts import EditorShortcuts
 
 TOOLS = [("select","Select"),("room","Room"),("rectangle","Rectangle"),
-         ("ellipse","Ellipse"),("wall","Wall"),("line","Line"),("text","Text"),
+         ("ellipse","Ellipse"),("wall","Wall"),("circle_wall","Circle Wall"),("line","Line"),("text","Text"),
          ("door","Door"),("double_door","Double door"),("opening","Opening"),
          ("window","Window"),("stairs","Stairs"),
-         ("roof","Roof"),("dimension","Dimension"),("pan","Pan")]
+         ("roof","Roof"),("gazebo_roof","Gazebo Roof"),
+         ("court_roof","Court Roof"),("dimension","Dimension"),("pan","Pan")]
 STAMP_SIZES = {"door":(60,60),"double_door":(120,60),"opening":(60,12),
                "window":(80,10),"stairs":(80,160),
-               "text":(180,30),"dimension":(160,30),"roof":(320,200)}
+               "text":(180,30),"dimension":(160,30),"roof":(320,200),
+               "circle_wall":(300,300),"gazebo_roof":(320,320),"court_roof":(800,450)}
 
 
 class BuildingDraftEditor:
@@ -244,8 +248,8 @@ class BuildingDraftEditor:
 
     def create_item(self,kind,x,y,w,h):
         return DraftItem(kind,x,y,w,h,stroke=6 if kind=="wall" else 2,
-                         color="#783B23" if kind=="roof" else "#111111",
-                         fill="#C66A41" if kind=="roof" else "#FFFFFF" if kind=="room" else "none",
+                         color="#783B23" if kind in ROOF_KINDS else "#111111",
+                         fill="#C66A41" if kind in ROOF_KINDS else "#FFFFFF" if kind=="room" else "none",
                          text=self.properties["text"].value or "Room")
 
     def pointer_move(self,event):
@@ -353,7 +357,7 @@ class BuildingDraftEditor:
             values={key:(control.value if key in {"text","color","fill"} else
                          int(control.value) if key=="steps" else float(control.value))
                     for key,control in self.properties.items()}
-            changed=replace(item,**values,mirrored=self.mirror.value)
+            changed=replace(item,**diameter_values(item,values),mirrored=self.mirror.value)
             validate_item(changed)
             self.modify(lambda:self.document.floors.__setitem__(self.floor,[changed if obj.id==item.id else obj for obj in self.items()]))
         except (ValueError,TypeError) as error:

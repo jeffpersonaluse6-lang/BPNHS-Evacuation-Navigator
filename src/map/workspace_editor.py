@@ -8,6 +8,8 @@ import flet as ft
 import flet.canvas as cv
 from drafting.editor import BuildingDraftEditor,TOOLS,STAMP_SIZES
 from drafting.models import DraftDocument,validate_item
+from drafting.circular import CIRCLE_KINDS,diameter_values
+from drafting.roof import ROOF_KINDS
 from drafting.handles import transform
 from editor_shortcuts import EditorShortcuts
 from navigation.collision import barriers_for,move_with_collisions,find_free_position,openings_for,snap_opening_to_wall,OPENING_KINDS,COLLISION_KINDS,collision_thickness,project_barriers
@@ -29,10 +31,11 @@ from .interaction import Interaction
 from .railing_editor import RailingEditor
 from .stair_editor import StairEditor,transition_shapes
 from .collision_editor import CollisionEditor
+from .structure_editor import StructureEditor
 from navigation.stairs import STAIR_KINDS,indicators
 
 MAP_TOOLS=[("select","Select"),("pan","Pan"),("building","Building"),("room","Room"),
-    ("wall","Wall"),("railing","Railing / barrier"),("floor","Floor section"),("entry_zone","Entry / approach area")]+[(k,v) for k,v in TOOLS if k not in {"select","pan","room","wall"}]
+    ("wall","Wall"),("circle_wall","Circle Wall"),("railing","Railing / barrier"),("floor","Floor section"),("entry_zone","Entry / approach area")]+[(k,v) for k,v in TOOLS if k not in {"select","pan","room","wall","circle_wall"}]
 MAP_STAMPS={**STAMP_SIZES,"building":(300,180),"railing":(200,0),"floor":(300,180),"entry_zone":(180,120)}
 LINE_KINDS={"line","wall","railing"}
 
@@ -95,6 +98,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         self.railings=RailingEditor(self)
         self.collision_editor=CollisionEditor(self)
         self.stair_editor=StairEditor(self)
+        self.structures=StructureEditor(self)
         self.floor_count=ft.TextField(label="Building floors",dense=True,visible=False)
         self.shortcuts=EditorShortcuts(page,lambda:self.history(False),lambda:self.history(True),
             blocked=lambda:self.exporting or self.dialog_open or self.move_mode or not self.active,
@@ -103,6 +107,8 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             "shift+g":lambda:self.selection.group(True),"a":self.select_all,
             "plain:delete":self.delete,"plain:escape":self.deselect}
         for field in [self.name,self.map_width,self.map_height,self.length,self.floor_count,self.stair_editor.speed,self.approach,*self.properties.values()]: self.shortcuts.watch_text(field)
+        for field in (self.structures.radius,self.structures.diameter,self.structures.opacity):self.shortcuts.watch_text(field)
+        for field in (self.structures.openings.angle,self.structures.openings.width):self.shortcuts.watch_text(field)
         self.shortcuts.watch_text(self.railings.slider)
         self.shortcuts.watch_text(self.collision_editor.slider)
         self.shortcuts.watch_text(self.collision_editor.field)
@@ -124,6 +130,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         inspector.controls.insert(2,self.length)
         inspector.controls.insert(3,self.railings.control)
         inspector.controls.insert(3,self.stair_editor.control)
+        inspector.controls.insert(3,self.structures.control)
         inspector.controls.insert(3,self.collision_editor.control)
         inspector.controls.insert(3,self.floor_count)
         inspector.controls[4:4]=[self.fade,self.owner,self.approach]
@@ -245,6 +252,9 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             self.stair_editor.control,self.stair_editor.source,self.stair_editor.target,self.stair_editor.direction,
             self.stair_editor.enabled,self.stair_editor.connection_controls,
             self.stair_editor.speed,*self.properties.values(),*self.tool_buttons.values()]
+        controls.extend((self.structures.control,self.structures.circle_control,self.structures.radius,self.structures.diameter,self.structures.opacity))
+        gaps=self.structures.openings
+        controls.extend((gaps.control,gaps.picker,gaps.angle,gaps.width,gaps.slider,gaps.add_button,gaps.apply_button,gaps.delete_button))
         result={}
         for control in controls:
             state=tuple(getattr(control,key,None) for key in ("value","visible","disabled","bgcolor","content"))
@@ -348,9 +358,10 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             self.railings.sync(item,len(selected_items)>1)
             self.collision_editor.sync(item,len(selected_items)>1)
             self.stair_editor.sync(item,len(selected_items)>1)
+            self.structures.sync(item,len(selected_items)>1)
             self.blocks.visible=bool(item and item.kind in COLLISION_KINDS)
             self.floor_count.visible=bool(item and item.kind=="building")
-            self.approach.visible=self.floor_count.visible
+            self.approach.visible=bool(item and item.kind in ROOF_KINDS|{"building"})
             owner_options=[("","No attachment")]+[(i.id,f"{i.kind}: {i.text}") for i in self.editable_items() if item and i.id!=item.id]
             if parent: owner_options.append((parent.id,"Building root"))
             self.dropdown_options(self.owner,owner_options)
@@ -410,7 +421,11 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         self.refresh(properties=True)
 
     def create_item(self,kind,x,y,w,h):
+        if kind in CIRCLE_KINDS:w=h=max(4,w,h)
         item=super().create_item(kind,x,y,w,h)
+        if kind=="circle_wall":return replace(item,stroke=8,collision_thickness=8,fill="none",text="Circle Wall")
+        if kind=="gazebo_roof":return replace(item,fill="#BA8B49",color="#68481D",blocking=False,text="Gazebo Roof")
+        if kind=="court_roof":return replace(item,fill="#9CAFBF",color="#445869",blocking=False,text="Court Roof")
         if kind in {"wall","room"}:return replace(item,collision_thickness=collision_thickness(item))
         if kind in STAIR_KINDS:
             source=int(self.floor.split()[-1]) if ":Floor " in self.floor else None
@@ -549,6 +564,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         super().finish()
         if hasattr(self,"railings"):self.railings.active=False
         if hasattr(self,"collision_editor"):self.collision_editor.active=False
+        if hasattr(self,"structures"):self.structures.openings.active=False
         self.alignment_guides=[]
         if hasattr(self,"selection"): self.selection.finish()
 
@@ -847,11 +863,11 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             if count<item.floor_count and any(i.kind in STAIR_KINDS and i.stair_to is not None and i.stair_to>count
                     for n in range(1,count+1) for i in self.document.floors.get(scope_key(item,f"Floor {n}"),[])):
                 raise ValueError("Change stairs leading to deleted floors first, or use Remove current floor")
-            changed=replace(item,**values,mirrored=self.mirror.value,blocking=self.blocks.value if item.kind in COLLISION_KINDS else item.blocking,floor_count=count,
-                collision_thickness=collision_thickness(item) if item.kind in {"wall","room","railing"} or
+            changed=replace(item,**diameter_values(item,values),mirrored=self.mirror.value,blocking=self.blocks.value if item.kind in COLLISION_KINDS else item.blocking,floor_count=count,
+                collision_thickness=collision_thickness(item) if item.kind in {"wall","room","circle_wall","railing"} or
                     (item.kind in STAIR_KINDS and self.blocks.value) else item.collision_thickness,
                 completed_floors=tuple(n for n in item.completed_floors if n<=count),fade_when_obstructing=self.fade.value,
-                approach_distance=float(self.approach.value) if item.kind=="building" else item.approach_distance)
+                approach_distance=float(self.approach.value) if item.kind in ROOF_KINDS|{"building"} else item.approach_distance)
             validate_item(changed)
             def apply():
                 self.document.floors[self.floor]=[changed if i.id==item.id else i for i in self.items()]

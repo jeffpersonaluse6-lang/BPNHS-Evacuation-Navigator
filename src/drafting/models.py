@@ -6,10 +6,12 @@ from html import escape
 import json
 import math
 import uuid
-from .roof import roof_seams
+from .roof import roof_seams,structure_roof_primitives,ROOF_KINDS
+from .circular import ellipse_points,solid_arcs,CircleOpening,validate_openings,load_openings
 
 KINDS = {"room", "rectangle", "floor", "ellipse", "wall", "line", "door", "double_door",
-         "opening", "window", "stairs", "text", "dimension", "roof", "railing", "building", "entry_zone"}
+         "opening", "window", "stairs", "text", "dimension", "roof", "railing", "building", "entry_zone",
+         "circle_wall","gazebo_roof","court_roof"}
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,8 @@ class DraftItem:
     stair_speed_multiplier: float | None = None
     # Physical collision width; None uses legacy defaults.
     collision_thickness: float | None = None
+    opacity: float = 1
+    circle_openings: tuple[CircleOpening,...] = ()
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
     def local_to_world(self, x, y):
@@ -69,6 +73,11 @@ class DraftItem:
 
     def contains(self, x, y, tolerance=8):
         x, y = self.world_to_local(x, y)
+        if self.kind in {"circle_wall","gazebo_roof"}:
+            rx,ry=self.width/2,self.height/2
+            normalized=math.hypot((x-rx)/rx,(y-ry)/ry)
+            reach=max(tolerance,self.stroke/2)/min(rx,ry)
+            return abs(normalized-1)<=reach if self.kind=="circle_wall" else normalized<=1+reach
         if self.kind in {"wall", "line", "railing"}:
             length2 = self.width ** 2 + self.height ** 2
             t = max(0, min(1, (x * self.width + y * self.height) / length2)) if length2 else 0
@@ -117,6 +126,11 @@ def primitives(item):
         box(0,0,w,h,item.fill)
         for seam in roof_seams(w,h):
             line(seam)
+    elif item.kind in {"gazebo_roof","court_roof"}:
+        result.extend(structure_roof_primitives(item))
+    elif item.kind == "circle_wall":
+        for start,end in solid_arcs(item):
+            line(ellipse_points(w,h,start,end),closed=end-start>=2*math.pi-1e-9)
     elif item.kind == "ellipse":
         line([(w/2+w/2*math.cos(i*math.pi/32),h/2+h/2*math.sin(i*math.pi/32))
               for i in range(64)], fill=item.fill, closed=True)
@@ -168,6 +182,10 @@ def primitives(item):
 def validate_item(item):
     if item.kind not in KINDS:
         raise ValueError("Unknown drawing object")
+    validate_openings(item.circle_openings)
+    if item.circle_openings and item.kind!="circle_wall":raise ValueError("Openings belong to Circle Walls")
+    if type(item.opacity) not in (int,float) or not math.isfinite(item.opacity) or not 0<=item.opacity<=1:
+        raise ValueError("Opacity must be between 0 and 1")
     for name in ("x","y","width","height","rotation","stroke","font_size"):
         value = getattr(item,name)
         if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or abs(value)>100000:
@@ -306,7 +324,8 @@ class DraftDocument:
                     raise ValueError("Invalid drawing object")
                 completed=item.get("completed_floors",())
                 if not isinstance(completed,(list,tuple)): raise ValueError("Invalid completed floor list")
-                obj=DraftItem(**{**item,"completed_floors":tuple(completed)})
+                obj=DraftItem(**{**item,"completed_floors":tuple(completed),
+                    "circle_openings":load_openings(item.get("circle_openings",()))})
                 validate_item(obj)
                 if obj.id in ids:
                     raise ValueError("Duplicate object IDs")
@@ -318,6 +337,7 @@ class DraftDocument:
         """SVG without grid or background; room fills kept."""
         result=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.width:g}" height="{self.height:g}" viewBox="0 0 {self.width:g} {self.height:g}">']
         for item in self.floors[floor]:
+            if item.kind in ROOF_KINDS and item.opacity!=1:result.append(f'<g opacity="{item.opacity:g}">')
             for primitive in primitives(item):
                 if "text" in primitive:
                     x,y=item.local_to_world(*primitive["position"])
@@ -326,5 +346,6 @@ class DraftDocument:
                     points=" ".join(f"{x:g},{y:g}" for x,y in (item.local_to_world(*point) for point in primitive["points"]))
                     tag="polygon" if primitive["closed"] else "polyline"
                     result.append(f'<{tag} points="{points}" stroke="{primitive["color"]}" stroke-width="{primitive["stroke"]:g}" fill="{primitive["fill"]}" stroke-linecap="butt" stroke-linejoin="miter"/>')
+            if item.kind in ROOF_KINDS and item.opacity!=1:result.append('</g>')
         result.append("</svg>")
         return "\n".join(result)

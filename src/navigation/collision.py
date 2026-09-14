@@ -5,9 +5,10 @@ from functools import lru_cache
 import math
 from spatial import BoundsIndex
 from drafting.models import railing_profile
+from drafting.circular import ellipse_points,solid_arcs
 
 OPENING_KINDS = {"door", "double_door", "opening"}
-WALL_KINDS = {"wall", "room"}
+WALL_KINDS = {"wall", "room", "circle_wall"}
 COLLISION_KINDS = WALL_KINDS | {"railing","stairs"}
 
 
@@ -107,6 +108,9 @@ def wall_edges(item,*,collision=False):
     if item.kind not in WALL_KINDS:
         return ()
     radius = collision_thickness(item)/2 if collision else max(.5,item.stroke/2)
+    if item.kind=="circle_wall":
+        points=[item.local_to_world(*p) for p in ellipse_points(item.width,item.height)]
+        return tuple((a,b,radius) for a,b in zip(points,points[1:]))
     if item.kind == "wall":
         local = [((0,0),(item.width,item.height))]
     else:
@@ -136,6 +140,11 @@ class OpeningIndex:
 
     def for_wall(self,item):
         if item.kind not in WALL_KINDS or not self.openings: return ()
+        if item.kind=="circle_wall":
+            points=[item.local_to_world(*p) for p in ellipse_points(item.width,item.height)]
+            radius=max(.5,item.stroke/2)
+            box=tuple((min(p[a] for p in points)-radius,max(p[a] for p in points)+radius) for a in (0,1))
+            return tuple(self.openings[n] for n in self.index.query(box))
         candidates=set()
         for start,end,radius in wall_edges(item):
             box=tuple((min(start[a],end[a])-radius-1e-7,max(start[a],end[a])+radius+1e-7) for a in (0,1))
@@ -178,6 +187,7 @@ def solid_sections(start,end,radius,openings):
 @lru_cache(maxsize=4096)
 def wall_sections(item,openings=()):
     """Visible wall sections with doorway gaps cut out."""
+    if item.kind=="circle_wall":return circular_wall_sections(item,openings,max(.5,item.stroke/2))
     return tuple(section for a,b,r in wall_edges(item) for section in solid_sections(a,b,r,openings))
 
 
@@ -187,8 +197,17 @@ def collision_wall_sections(item,openings=()):
     # accidentally cut a doorway on a parallel wall nearby.
     visual_radius=max(.5,item.stroke/2)
     radius=collision_thickness(item)/2
+    if item.kind=="circle_wall":return circular_wall_sections(item,openings,radius)
     return tuple(replace(section,radius=radius) for a,b,_ in wall_edges(item,collision=True)
         for section in solid_sections(a,b,visual_radius,openings))
+
+
+def circular_wall_sections(item,openings,radius):
+    sections=[]
+    for start,end in solid_arcs(item,openings):
+        points=[item.local_to_world(*p) for p in ellipse_points(item.width,item.height,start,end)]
+        sections.extend(Barrier(a,b,radius,flat=True) for a,b in zip(points,points[1:]))
+    return tuple(sections)
 
 
 @lru_cache(maxsize=4096)
@@ -222,8 +241,20 @@ def barriers_for(items):
 
 def snap_opening_to_wall(item,items,point,tolerance=20):
     """Snap a new opening to the nearest wall when clicking."""
-    candidates = []
+    candidates = [];circular=[]
     for wall in items:
+        if wall.kind=="circle_wall":
+            lx,ly=wall.world_to_local(*point);rx,ry=wall.width/2,wall.height/2
+            angle=math.atan2((ly-ry)/ry,(lx-rx)/rx)
+            rim=wall.local_to_world(rx+rx*math.cos(angle),ry+ry*math.sin(angle))
+            next_point=wall.local_to_world(rx+rx*math.cos(angle+.0001),ry+ry*math.sin(angle+.0001))
+            distance=math.dist(rim,point)
+            if distance<=tolerance+wall.stroke/2:
+                width=min(item.width,min(wall.width,wall.height)*.8)
+                aligned=replace(item,width=width,rotation=math.degrees(math.atan2(next_point[1]-rim[1],next_point[0]-rim[0])),x=0,y=0)
+                baseline=aligned.local_to_world(width/2,item.height/2 if item.kind=="opening" else item.height)
+                circular.append((distance,replace(aligned,x=rim[0]-baseline[0],y=rim[1]-baseline[1])))
+            continue
         for a,b,radius in wall_edges(wall):
             dx,dy = b[0]-a[0],b[1]-a[1]
             length = math.hypot(dx,dy)
@@ -235,6 +266,8 @@ def snap_opening_to_wall(item,items,point,tolerance=20):
             distance = math.hypot(point[0]-px,point[1]-py)
             if distance <= tolerance+radius:
                 candidates.append((distance,a,ux,uy,length,along))
+    if circular and (not candidates or min(circular,key=lambda c:c[0])[0]<min(candidates,key=lambda c:c[0])[0]):
+        return min(circular,key=lambda c:c[0])[1]
     if not candidates:
         return item
     _,a,ux,uy,length,along = min(candidates,key=lambda c:c[0])

@@ -8,6 +8,8 @@ import flet.canvas as cv
 from drafting.canvas import grid_shapes
 from drafting.handles import handles,frame
 from drafting.models import primitives
+from drafting.circular import wall_polygons
+from drafting.roof import ROOF_KINDS
 from navigation.collision import barriers_for_item,wall_sections,openings_for,WALL_KINDS,OpeningIndex
 from navigation.data import floor_scale
 from .scene import CAMPUS,to_placement,scope_key
@@ -38,6 +40,17 @@ def wall_polygon(barrier):
 def item_shapes(item,parent=None,collisions=False,openings=()):
     shapes=[]
     scale=min(floor_scale(parent))
+    if item.kind=="circle_wall":
+        if item.stroke:
+            for polygon in wall_polygons(item,openings):
+                shapes.append(path_shape([project(parent,*p) for p in polygon],item.color,fill=True,closed=True))
+        if collisions and item.blocking:
+            from navigation.collision import collision_thickness
+            for polygon in wall_polygons(item,openings,collision_thickness(item)/2):
+                points=[project(parent,*p) for p in polygon]
+                shapes.append(path_shape(points,"#00A6A6,0.12",fill=True,closed=True))
+                shapes.append(path_shape(points,"#00A6A6",1.5,closed=True))
+        return tuple(shapes)
     for primitive in primitives(item):
         if "text" in primitive:
             x,y=project(parent,*item.local_to_world(*primitive["position"]))
@@ -144,6 +157,7 @@ def render_scene(scene,scope=CAMPUS,collisions=False,grid=True,spacing=20,
         else: canvas=cached[1]
         # Canvas size changed but the geometry is still valid.
         canvas.width,canvas.height=scene.width,scene.height
+        canvas.opacity=item.opacity if item.kind in ROOF_KINDS else 1
         if cached is None or cached[0]!=signature:
             canvas.shapes=list(item_shapes(item,owner,collisions,openings))
         vector_cache[item.id]=(signature,canvas)

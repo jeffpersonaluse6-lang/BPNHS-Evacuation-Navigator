@@ -1,6 +1,8 @@
 {
   "schema": "bpnhs-player",
   "version": 1,
-  "visual_size": 14.0,
-  "collision_radius": 2.0
+  "visual_size": 9.0,
+  "collision_radius": 1.0,
+  "player_speed": 55.0,
+  "stair_speed_multiplier": 0.65
 }

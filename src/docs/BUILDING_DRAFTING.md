@@ -278,6 +278,54 @@ than applying one member's resize/property fields to the others.
 
 ## Smart alignment and spacing
 
+### School structures: Circle Wall, Gazebo Roof and Court Roof
+
+Both editing workspaces have **Circle Wall** beside Wall, plus **Gazebo Roof** and
+**Court Roof** beside the existing Roof tool. They remain separate saved object
+types; the normal hip roof is unchanged. Place them directly on Campus or a
+building's active floor/roof layer. No school structures are placed automatically.
+
+- **Circle Wall** is an unfilled round wall with an 8-unit default visual and
+  physical thickness. Collision follows the curved rim; the interior and bounding
+  square's corners remain free. Radius/diameter controls in Properties resize
+  around the center; resize handles keep the shape circular. Line thickness and
+  Collision Thickness are independent. Rotation, movement and geometry changes
+  update the shared boundary.
+- Place **Door**, **Double door** or **Opening** near the rim to snap it tangent
+  to the circle. The matching curved arc is removed from drawing and collision.
+  Doorways remain walkable when collision thickness changes. Door attachments
+  survive grouped duplication and cross-floor copying.
+- For wall-owned entrances, select **Circle Wall**, then use **Opening / Door
+  Gap** in Properties. Set an angle/width and press **Add Opening**. Select a
+  saved gap in the dropdown, edit its angle/width and press **Apply opening**,
+  or drag the angle slider to move it around the circumference with a live
+  visual/collision preview. **Delete opening** closes that portion of the wall.
+  Multiple gaps are supported; repeated Add clicks advance by 45° unless a
+  different angle is entered. Local 0° is right, 90° bottom, 180° left, 270° top
+  before wall rotation/flip. Gaps are saved inside the wall, not separate objects.
+  Moving, resizing, rotating, flipping, grouping and copying the wall carry all
+  its entrances; copies receive new gap IDs. Gap width stays in drawing units
+  during resizing, limited by the circle diameter if it becomes smaller. Both
+  visible walls and collision contain only the remaining solid arcs. Angle-slider
+  gestures update retained geometry and form one undoable edit on release.
+- **Gazebo Roof** is a circular radial roof with spokes, an eave ring and a small
+  central cap—not a stretched rectangular roof. Radius/diameter and handles fit
+  it over circular walls.
+- **Court Roof** is a distinct ribbed, gable-style rectangular cover for large
+  courts. Width/height fields and handles allow independent large dimensions;
+  rotate and move it like other objects.
+
+All roof types expose **Roof opacity (0–1)**, plus **Fade when view is obstructed**
+and **Roof reveal distance** in Properties. Settings are saved per object. The
+main application fades authored roof objects by their cached circular/rectangular
+footprint, including standalone Campus roofs. Roofs are covers, not collision
+walls; add walls/railings separately. Roofs assigned to building layers respect
+the existing floor visibility system. Runtime opacity changes never resize roofs
+or rebuild their geometry. New shapes support selection, snapping/alignment,
+manual groups, flip, copy/paste, duplicate, deletion, Undo/Redo and save/load.
+
+### Alignment controls
+
 **Smart alignment** and **Equal spacing** are enabled by default and can be toggled
 independently from **Snap to grid**. **Snap distance (px)** controls the small capture
 distance (default 6 screen pixels), taking viewer zoom and building scale into account.

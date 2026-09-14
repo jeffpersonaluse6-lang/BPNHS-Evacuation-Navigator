@@ -41,6 +41,12 @@ class Guide:
 
 @lru_cache(maxsize=4096)
 def bounds(item):
+    if item.kind in {"circle_wall","gazebo_roof"}:
+        cx,cy=item.local_to_world(item.width/2,item.height/2)
+        angle=math.radians(item.rotation);c,s=math.cos(angle),math.sin(angle)
+        rx,ry=item.width/2,item.height/2
+        ex,ey=math.hypot(rx*c,ry*s),math.hypot(rx*s,ry*c)
+        return ((cx-ex,cx+ex),(cy-ey,cy+ey))
     corners = ((0, 0), (item.width, item.height)) if item.kind in {
         "wall", "line", "railing"} else (
         (0, 0), (item.width, 0), (item.width, item.height), (0, item.height))

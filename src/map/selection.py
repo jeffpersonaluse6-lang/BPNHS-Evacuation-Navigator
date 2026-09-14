@@ -83,6 +83,7 @@ def clone_bundle(roots,floors):
     def clone(item):
         return replace(item,id=ids[item.id],parent_id=ids.get(item.parent_id),
             group_id=groups.get(item.group_id),
+            circle_openings=tuple(replace(gap,id=uuid.uuid4().hex) for gap in item.circle_openings),
             opens=f"scene:{ids[item.id]}" if item.kind=="building" and (not item.opens or item.opens.startswith("scene:")) else item.opens)
     new_roots=[clone(i) for i in roots]
     new_floors={f"{ids[key.split(':',1)[0]]}:{key.split(':',1)[1]}":[clone(i) for i in children]

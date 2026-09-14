@@ -6,6 +6,8 @@ from .scene import CAMPUS,scope_key
 from .scene_renderer import building_image,item_shapes,project,path_shape
 from navigation.collision import openings_for,OpeningIndex
 from navigation.data import floor_frame
+from drafting.roof import ROOF_KINDS
+from .roof_fading import RoofFading
 
 
 class WorldMapView:
@@ -16,10 +18,13 @@ class WorldMapView:
         self.previous_parent=None
         self.floor_values={}
         self.faded_roofs=set()
+        self.object_roofs=RoofFading(scene)
         controls=[ft.Container(width=scene.width,height=scene.height,bgcolor="#EDF8FA")]
         context=OpeningIndex(openings_for(scene.floors[CAMPUS]))
         for item in scene.floors[CAMPUS]:
             if item.kind!="building":
+                if item.kind in ROOF_KINDS:
+                    controls.append(self.object_roofs.add(item));continue
                 if item.kind!="entry_zone":
                     controls.append(cv.Canvas(width=scene.width,height=scene.height,
                         shapes=list(item_shapes(item,openings=context.for_wall(item)))))
@@ -38,24 +43,29 @@ class WorldMapView:
                         shapes=[path_shape(points,"#FFFFFF",fill=True,closed=True)])
                 controls.extend(self.add_layer(item,n,base,children))
             roof=scene.floors.get(scope_key(item,"Roof"),[])
-            roof_base=(cv.Canvas(width=scene.width,height=scene.height) if (item.free_build or any(c.kind=="roof" for c in roof)) and not item.layer_style and not item.image_src
+            roof_base=(cv.Canvas(width=scene.width,height=scene.height) if (item.free_build or any(c.kind in ROOF_KINDS for c in roof)) and not item.layer_style and not item.image_src
                        else building_image(item))
             controls.extend(self.add_layer(item,"Roof",roof_base,roof,roof=True))
+        self.object_roofs.finish()
         self.control=ft.Stack(width=scene.width,height=scene.height,controls=controls)
 
     def add_layer(self,parent,key,base,items,roof=False):
         context=OpeningIndex(openings_for(items))
         fade_shapes=[]
         solid_shapes=[]
+        fade_roofs=[];solid_roofs=[]
         for item in items:
             if item.kind=="entry_zone": continue
+            if item.kind in ROOF_KINDS:
+                (fade_roofs if item.fade_when_obstructing else solid_roofs).append(self.object_roofs.add(item,parent));continue
             target=fade_shapes if item.fade_when_obstructing else solid_shapes
             target.extend(item_shapes(item,parent,openings=context.for_wall(item)))
         fade=ft.Container(opacity=1 if key in {1,"Roof"} else 0,
             animate_opacity=ft.Animation(140,ft.AnimationCurve.EASE_OUT) if roof else None,
             content=ft.Stack(width=self.scene.width,height=self.scene.height,controls=[base,
-                cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=fade_shapes)]))
+                cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=fade_shapes),*fade_roofs]))
         solid=ft.Container(opacity=1 if key in {1,"Roof"} else 0,content=cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=solid_shapes))
+        if solid_roofs:solid.content=ft.Stack(width=self.scene.width,height=self.scene.height,controls=[solid.content,*solid_roofs])
         self.layers[parent.id,key]=(fade,solid)
         return [fade,solid]
 
@@ -84,4 +94,5 @@ class WorldMapView:
             opacity(fade,value)
             if value<1:fading.add(pid)
         self.faded_roofs=fading
+        dirty.extend(self.object_roofs.update(point))
         return dirty
