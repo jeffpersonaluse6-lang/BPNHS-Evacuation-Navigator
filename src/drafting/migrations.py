@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import math
+import uuid
 
 
 def corners(item):
@@ -33,7 +34,7 @@ def migrate_stair_data(raw):
     if not isinstance(floors,dict):return raw,()
     if not any(isinstance(i,dict) and (i.get("kind")=="floor_activator" or
             any(k.startswith("activator_") for k in i)) for items in floors.values()
-            if isinstance(items,list) for i in items):return raw,()
+            if isinstance(items,list) for i in items):return normal_stairs_only(raw),()
     raw=deepcopy(raw);notes=[]
     for scope,items in raw["floors"].items():
         if not isinstance(items,list):continue
@@ -73,4 +74,48 @@ def migrate_stair_data(raw):
                 item.setdefault("stair_from",number)
             kept.append(item)
         raw["floors"][scope]=kept
-    return raw,tuple(notes)
+    return normal_stairs_only(raw),tuple(notes)
+
+
+def normal_stairs_only(raw):
+    """One-way legacy conversion. The live model only stores normal stairs.
+
+    Preserve each old flight as an independent Stair, plus ordinary landing and
+    divider shapes. This is import compatibility, not a creation/runtime tool.
+    """
+    floors=raw.get("floors",{})
+    if not any(isinstance(i,dict) and (i.get("kind")=="double_stairs" or
+            any(k.startswith("stair_right_") for k in i)) for items in floors.values()
+            if isinstance(items,list) for i in items):return raw
+    raw=deepcopy(raw)
+    for scope,items in raw["floors"].items():
+        if not isinstance(items,list):continue
+        converted=[]
+        for original in items:
+            if not isinstance(original,dict):converted.append(original);continue
+            item={k:v for k,v in original.items() if not k.startswith("stair_right_")}
+            if original.get("kind")!="double_stairs":converted.append(item);continue
+            w,h=original["width"],original["height"]
+            if not (type(w) in (int,float) and type(h) in (int,float) and math.isfinite(w) and math.isfinite(h) and w>0 and h>0):
+                raise ValueError("Invalid legacy stair dimensions")
+            landing=min(24,h/5);gap=min(3,w/8)
+            def fragment(label,kind,lo,y,width,height,**settings):
+                angle=math.radians(original.get("rotation",0))
+                x=w-lo-width if original.get("mirrored",False) else lo
+                identity=original["id"] if label=="left" else uuid.uuid5(uuid.NAMESPACE_URL,f"bpnhs-stair:{original['id']}:{label}").hex
+                return {**item,"kind":kind,"id":identity,"x":original["x"]+x*math.cos(angle)-y*math.sin(angle),
+                    "y":original["y"]+x*math.sin(angle)+y*math.cos(angle),"width":width,"height":height,**settings}
+            physical=original.get("blocking",True) and original.get("collision_thickness") is not None
+            converted.append(fragment("left","stairs",0,landing,w/2-gap,h-landing,blocking=False if physical else original.get("blocking",True)))
+            converted.append(fragment("right","stairs",w/2+gap,landing,w/2-gap,h-landing,
+                stair_direction=original.get("stair_right_direction","down"),stair_to=original.get("stair_right_to"),
+                stair_enabled=original.get("stair_right_enabled",True),blocking=False if physical else original.get("blocking",True)))
+            converted.append(fragment("landing","rectangle",0,0,w,landing,blocking=False,fill="#FFFFFF",collision_thickness=None))
+            converted.append(fragment("divider","rectangle",w/2-gap,landing,2*gap,h-landing,blocking=False,fill="#FFFFFF",collision_thickness=None))
+            if physical:
+                for label,x,y,height in (("side-left",0,0,h),("side-right",w,0,h),("center",w/2,landing,h-landing)):
+                    # A line has no local width, so mirroring its vector changes
+                    # nothing. The transformed start preserves the old barrier.
+                    converted.append(fragment(label,"wall",x,y,0,height,fill="none",blocking=True,stair_enabled=False))
+        raw["floors"][scope]=converted
+    return raw

@@ -170,7 +170,7 @@ class BuildingWorkflowTests(unittest.TestCase):
             free_build=True,floor_count=2,completed_floors=(1,2),rotation=35,mirrored=True,text="Main Building")
         room=DraftItem("room",100,100,300,200,group_id="room-group")
         door=DraftItem("door",200,40,100,60,parent_id=room.id,group_id="room-group")
-        stair=DraftItem("double_stairs",500,100,120,220,stair_to=2)
+        stair=DraftItem("stairs",500,100,120,220,stair_to=2)
         down=DraftItem("stairs",500,100,120,220,stair_direction="down",stair_to=1)
         rail=DraftItem("railing",100,400,400,0,stroke=14)
         lower=[room,door,stair,DraftItem("window",350,100,80,40),rail]
@@ -329,8 +329,7 @@ class BuildingWorkflowTests(unittest.TestCase):
             p,inside,_=section_progress(transitions(item,1,4)[0],item.local_to_world(40,80))
             self.assertAlmostEqual(p,.5)
             self.assertTrue(inside)
-        double=replace(up,kind="double_stairs",width=120)
-        self.assertEqual([arrow[2] for arrow in indicators(double)],["UP","DOWN"])
+        self.assertEqual([arrow[2] for arrow in indicators(up)],["UP"])
         self.assertEqual(connection(up,0,1,4),2)
         self.assertEqual(connection(down,0,3,4),2)
         self.assertIsNone(connection(down,0,1,4))

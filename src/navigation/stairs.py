@@ -2,21 +2,13 @@
 
 from dataclasses import dataclass
 
-STAIR_KINDS={"stairs","double_stairs"}
-
-
-def stair_sections(item):
-    if item.kind=="stairs":
-        return ((0,item.width,item.stair_direction,item.stair_to),)
-    gap=min(3,item.width/8)
-    return ((0,item.width/2-gap,item.stair_direction,item.stair_to),
-            (item.width/2+gap,item.width,item.stair_right_direction,item.stair_right_to))
+STAIR_KINDS={"stairs"}
 
 
 def connection(item,section,floor,count):
     if item.stair_from is not None and item.stair_from!=floor:return None
-    if not (item.stair_enabled if section==0 else item.stair_right_enabled):return None
-    _,_,direction,explicit=stair_sections(item)[section]
+    if item.kind != "stairs" or section!=0 or not item.stair_enabled:return None
+    direction,explicit=item.stair_direction,item.stair_to
     target=explicit if explicit is not None else floor+(1 if direction=="up" else -1)
     if explicit is None and (target<1 or target>count):return None
     return target if 1<=target<=count and target!=floor and (direction=="up")== (target>floor) else None
@@ -26,35 +18,27 @@ def connection(item,section,floor,count):
 class StairSection:
     """Derived runtime flight, never a separately stored or editable object."""
     stair: object
-    number: int
     source: int
     target: int
 
     @property
-    def id(self):return f"{self.stair.id}:flight:{self.number}"
+    def id(self):return f"{self.stair.id}:stair"
 
     @property
-    def direction(self):return stair_sections(self.stair)[self.number][2]
-
-    @property
-    def landing(self):return min(24,self.stair.height/5) if self.stair.kind=="double_stairs" else 0
+    def direction(self):return self.stair.stair_direction
 
     @property
     def width(self):
-        lo,hi,_,_=stair_sections(self.stair)[self.number]
-        return hi-lo
+        return self.stair.width
 
     @property
-    def height(self):return self.stair.height-self.landing
+    def height(self):return self.stair.height
 
     def local_to_world(self,x,y):
-        lo=stair_sections(self.stair)[self.number][0]
-        return self.stair.local_to_world(x+lo,y+self.landing)
+        return self.stair.local_to_world(x,y)
 
     def world_to_local(self,x,y):
-        x,y=self.stair.world_to_local(x,y)
-        lo=stair_sections(self.stair)[self.number][0]
-        return x-lo,y-self.landing
+        return self.stair.world_to_local(x,y)
 
     def contains(self,x,y,tolerance=0):
         x,y=self.world_to_local(x,y)
@@ -63,8 +47,8 @@ class StairSection:
 
 def transitions(item,floor,count):
     if item.kind not in STAIR_KINDS:return ()
-    return tuple(StairSection(item,n,floor,target) for n in range(len(stair_sections(item)))
-        if (target:=connection(item,n,floor,count)) is not None)
+    target=connection(item,0,floor,count)
+    return (StairSection(item,floor,target),) if target is not None else ()
 
 
 def section_progress(section,point):
@@ -74,12 +58,7 @@ def section_progress(section,point):
 
 
 def indicators(item):
-    """Arrow endpoints and labels for each flight."""
-    landing=min(24,item.height/5) if item.kind=="double_stairs" else 0
-    result=[]
-    for lo,hi,direction,_ in stair_sections(item):
-        x=(lo+hi)/2
-        start,end=(item.height*.8,landing+(item.height-landing)*.2)
-        if direction=="down": start,end=end,start
-        result.append(((x,start),(x,end),direction.upper()))
-    return result
+    """Arrow endpoints for the normal stair's walking direction."""
+    x=item.width/2;start,end=item.height*.8,item.height*.2
+    if item.stair_direction=="down":start,end=end,start
+    return [((x,start),(x,end),item.stair_direction.upper())]

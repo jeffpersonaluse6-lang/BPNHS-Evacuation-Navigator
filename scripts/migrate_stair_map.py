@@ -12,10 +12,12 @@ from map.scene_store import save_scene
 def migrate(path):
     path=Path(path).resolve(strict=True)
     original=path.read_bytes();scene=MapScene.from_json(original.decode("utf-8-sig"))
-    if b'"activator_' not in original and b'"floor_activator"' not in original:
-        print("Map already uses stair-owned transitions; no changes.");return
+    legacy_double=b'"double_stairs"' in original or b'"stair_right_' in original
+    if not legacy_double and b'"activator_' not in original and b'"floor_activator"' not in original:
+        print("Map already uses normal stair-owned transitions; no changes.");return
     if scene.migration_notes:raise ValueError("Resolve migration warnings before saving: "+"; ".join(scene.migration_notes))
-    backup=path.with_name(path.stem+".before-stair-transitions"+path.suffix)
+    suffix=".before-normal-stairs" if legacy_double else ".before-stair-transitions"
+    backup=path.with_name(path.stem+suffix+path.suffix)
     if backup.exists():raise FileExistsError(f"Backup already exists; preserved: {backup}")
     if path.read_bytes()!=original:raise RuntimeError("Map changed during migration; no map content was overwritten")
     with backup.open("xb") as file:file.write(original)
@@ -23,7 +25,7 @@ def migrate(path):
     save_scene(scene,path)
     print(f"Migrated map: {path}")
     print(f"Original map backup: {backup}")
-    print("Stair geometry, other objects and floors preserved; standalone zones removed.")
+    print("Legacy stair data converted; other objects and floors preserved.")
 
 
 if __name__=="__main__":

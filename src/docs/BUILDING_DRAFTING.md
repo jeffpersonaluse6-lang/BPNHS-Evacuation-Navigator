@@ -131,17 +131,16 @@ without allowing reference objects to be selected or modified.
 
 ## Stair direction and continuous player exploration
 
-**Stair Up** and **Stair Down** reuse the single Stair tool. Double Stairs retain
-their original landing, step lines and divider. Direction/left flight and right
-flight properties reverse the progressive tread shading independently. Select a
+**Stair Up** and **Stair Down** reuse the single Stair tool. Direction properties
+reverse the progressive tread shading. Select a
 stair to configure **Stair floor transition**, then **Apply stair settings**.
 The selected stair shows blue UP/DOWN arrows and derived walking-area guides only
 in the editor. The connection belongs to the stair, not a separate drawn zone.
 A saved explicit destination must exist and agree with Up/Down.
 
 Place matching stairs/landings at the same coordinates on connected floors. Up
-travels from the bottom end toward the top/landing; Down reverses it. Double stairs
-default to opposite up/down flights. Shadows and arrows never add collision; draw
+travels from the bottom end toward the top/landing; Down reverses it.
+Shadows and arrows never add collision; draw
 railings alongside flights/balconies wherever movement must be constrained.
 
 The main app retains all buildings and floor controls on one world map. Approaching
@@ -158,21 +157,21 @@ exit restores the roof on departure. Explicitly non-fading roof objects stay vis
 
 1. Create the connected floors using **Add floor** or **Floor Done → next**.
    Floor counts and connection choices are dynamic; there is no two-floor limit.
-2. Place a **Stair** or **Double Stair** on a numbered building floor. Its invisible
-   usable walking area is automatic: the full tread area for a single Stair,
-   or one area for each Double Stair flight, excluding the central divider and
-   shared landing. There is no separate activation-area object or drawing tool.
+2. Place a **Stair** on a numbered building floor. Its invisible usable walking
+   area automatically matches its full tread area. There is no separate
+   activation-area object or drawing tool.
 3. Select the stair and configure **From Floor**, **To Floor** and **Direction:
    Up / Down** in **Stair floor transition**. The default To Floor is adjacent
    in that direction; an unavailable floor means no active connection. Explicit
    targets must exist and agree with the direction. Changing From Floor moves
    the stair to that floor without changing its geometry. Click **Apply stair settings**.
-4. Double Stairs expose a separate **Right flight To Floor**, direction and enabled
-   setting. For example, one Floor 2 flight can descend to Floor 1 and the other
-   ascend to Floor 3. Configure each floor's stair section separately, never a
-   single object claiming to transition through every floor in one interaction.
+4. **Enable Stair Activator** turns the selected stair's transition on/off
+   immediately, with Undo/Redo support. Disabled stairs remain visible and retain
+   their collision settings, but never trigger floor or opacity changes. Save
+   the map to persist this setting. Configure independent normal stairs for
+   separate flights or floor connections.
 5. **Stair speed multiplier** is optional (0.25–1.0). Blank inherits the player's
-   stair-speed setting. Enabling/disabling a flight's transition is independent
+   stair-speed setting. Enabling/disabling a stair's transition is independent
    from its wall/railing collision. Moving, resizing, rotating or mirroring the
    stair immediately changes its derived activation area. No attachment is needed.
 6. Save the building/map and use **Run evacuation demo** for a full transition test.
@@ -184,7 +183,7 @@ entry. Progress continuously blends source/destination visibility from 0–100%;
 turning back halfway reverses it smoothly. Reaching the far end commits the
 destination. After completion, all stair connections stay disarmed until the
 player's entire collision circle leaves the completed and overlapping destination
-stair footprints, including the Double Stair landing, plus a 3-map-unit anti-jitter
+stair footprints, plus a 3-map-unit anti-jitter
 margin. Walking across the landing cannot bounce floors. Re-entry must be intentional.
 Only current-floor stair connections are candidates; an active transition exclusively
 owns its flight until completion or cancellation. Runtime phases are ON_FLOOR,
@@ -216,6 +215,11 @@ than silently dropping a route. Saving writes only stair-owned data. The normal
 app has no old-zone trigger path or editor imports. Unmatched old zones produce
 import diagnostics and require configuring the relevant stair manually.
 
+Legacy double-stair objects are imported once as two independent normal Stairs
+and ordinary landing/divider shapes, preserving their individual connections.
+New saves contain no double-stair objects or right-flight properties. There is
+no Double Stair tool, live model, renderer or special transition path.
+
 This is a layered 2D prototype, not a 3D structural/falling simulation. Floors need
 properly authored walls, landings and railings; safety routes need school validation.
 
@@ -244,6 +248,31 @@ selection. Copy/paste uses an editor-memory bundle, not the system clipboard, an
 keeps building floor/roof contents. Cloning remaps component, parent and group IDs;
 copying a room does not accidentally attach it to the original. Group moves and
 bundle operations each form one undoable edit; collision recomputes from geometry.
+
+**Cross-floor Copy/Paste:** select objects (or Ctrl+A for the current floor),
+Copy / Ctrl+C, switch floors with the floor buttons or picker, then Paste / Ctrl+V.
+The session clipboard survives floor changes. On a different floor, pasted
+objects keep their exact floor coordinates, dimensions, rotation and other
+properties. They receive new object/group IDs; copied attachments are rebound
+inside the new bundle and building-root attachments belong to the destination
+building. The source floor stays unchanged. Stair From Floor becomes the current
+floor; explicit To Floor keeps its relative floor offset. If that destination
+doesn't exist, only that stair's activator is disabled and its target cleared,
+with a status message—walls and the rest of the layout still paste normally.
+Configure the connection after adding the necessary floor. Same-floor Paste and
+Duplicate keep their existing 24-unit offset. Paste supports Undo/Redo and saving.
+
+**Flip Horizontal / Flip Vertical:** use Flip Horizontal in the toolbar or
+Flip Vertical directly below **Mirror horizontally** in the Properties panel to mirror
+a single item, multiple selected items or a manual group about the selection's
+center line in floor coordinates. Press the same button again to revert, or use
+Undo. Rotation and the shared mirror transform reflect drawing, wall/railing
+collision, door/window geometry and stair walking progress together. IDs,
+grouping, attachments, dimensions and collision thickness remain unchanged.
+Stair Up/Down and From/To Floor keep their intended floor connection; the
+world-space entrance and exit positions mirror with the stair. The existing
+single-item horizontal mirror property is also still available.
+
 Bulk selections intentionally expose movement, grouping and bundle actions rather
 than applying one member's resize/property fields to the others.
 
@@ -294,8 +323,8 @@ later. **Blocks player** can still disable an object's physical collision.
 
 Wall and room collision is split around aligned doorway gaps at every thickness;
 increasing the width never places collision across the doorway. Railings retain
-rounded physical ends. Stairs can optionally block along their left/right sides
-and the Double Stair divider, with open ends and walkable treads. Set a stair's
+rounded physical ends. Stairs can optionally block along their left/right sides,
+with open ends and walkable treads. Set a stair's
 Collision Thickness or enable Blocks player and Apply properties to add those
 barriers. Physical collision thickness is independent of the stair's floor connection.
 

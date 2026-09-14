@@ -14,10 +14,10 @@ from editor_shortcuts import EditorShortcuts
 TOOLS = [("select","Select"),("room","Room"),("rectangle","Rectangle"),
          ("ellipse","Ellipse"),("wall","Wall"),("line","Line"),("text","Text"),
          ("door","Door"),("double_door","Double door"),("opening","Opening"),
-         ("window","Window"),("stairs","Stairs"),("double_stairs","Double stairs"),
+         ("window","Window"),("stairs","Stairs"),
          ("roof","Roof"),("dimension","Dimension"),("pan","Pan")]
 STAMP_SIZES = {"door":(60,60),"double_door":(120,60),"opening":(60,12),
-               "window":(80,10),"stairs":(80,160),"double_stairs":(120,180),
+               "window":(80,10),"stairs":(80,160),
                "text":(180,30),"dimension":(160,30),"roof":(320,200)}
 
 
@@ -70,6 +70,7 @@ class BuildingDraftEditor:
                          ("steps","Stair treads","12"),("color","Line color (#RRGGBB)","#111111"),
                          ("fill","Fill (#RRGGBB or none)","none"))}
         self.mirror=ft.Checkbox(label="Mirror horizontally",value=False)
+        self.stair_enabled=ft.Checkbox(label="Enable Stair Activator",value=True,visible=False,on_change=self.toggle_stair_enabled)
         for field in [self.name,*self.properties.values()]:
             self.shortcuts.watch_text(field)
         self.selected_label=ft.Text("No object selected",weight=ft.FontWeight.BOLD)
@@ -82,7 +83,7 @@ class BuildingDraftEditor:
                                         min_scale=.3,max_scale=4,boundary_margin=ft.Margin.all(500))
         self.sidebar=ft.Container(visible=False,width=225,padding=10,bgcolor="#F8FAFC",content=ft.Column(
             scroll=ft.ScrollMode.AUTO,controls=[self.selected_label]+list(self.properties.values())+[
-                self.mirror,ft.Button("Apply properties",on_click=self.apply_properties),
+                self.mirror,self.stair_enabled,ft.Button("Apply properties",on_click=self.apply_properties),
                 ft.Row(wrap=True,controls=[ft.Button("Rotate 90°",on_click=lambda event:self.rotate()),
                     ft.Button("Duplicate",on_click=self.duplicate),ft.Button("Delete",on_click=self.delete)]),
                 ft.Row(wrap=True,controls=[ft.Button("Bring front",on_click=lambda event:self.reorder(True)),
@@ -145,6 +146,8 @@ class BuildingDraftEditor:
         if properties:
             item=self.selected_item()
             self.selected_label.value=f"Selected: {item.kind.replace('_',' ')}" if item else "No object selected"
+            self.stair_enabled.visible=bool(item and item.kind=="stairs")
+            if item:self.stair_enabled.value=item.stair_enabled
             if item:
                 for key,control in self.properties.items():
                     control.value=str(getattr(item,key))
@@ -153,6 +156,7 @@ class BuildingDraftEditor:
             self.page.update()
 
     def choose_tool(self,kind):
+        if kind not in dict(TOOLS):return
         self.cancel_gesture(update=False)
         self.tool=kind
         if kind not in {"select","pan"}:
@@ -166,6 +170,13 @@ class BuildingDraftEditor:
         self.status.value=f"Tool: {dict(TOOLS)[kind]}. " + ("Drag to pan; scroll or use +/- to zoom." if kind=="pan" else
             "Click to place a symbol." if kind in STAMP_SIZES else "Drag to move; square handles resize; ↻ rotates." if kind=="select" else "Drag from start to end.")
         self.refresh()
+
+    def toggle_stair_enabled(self,event):
+        item=self.selected_item()
+        if self.exporting or not item or item.kind!="stairs" or type(event.control.value) is not bool:return
+        before=self.document.snapshot();changed=replace(item,stair_enabled=event.control.value)
+        self.document.floors[self.floor]=[changed if i.id==item.id else i for i in self.items()]
+        self.document.remember(before);self.refresh(properties=True)
 
     async def add_object(self,event=None):
         if self.exporting:

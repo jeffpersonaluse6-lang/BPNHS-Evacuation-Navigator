@@ -116,6 +116,9 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         self.building_actions=ft.Row(visible=False,spacing=8,
             controls=[self.selected_building_name,self.edit_building_button])
         inspector=self.sidebar.content
+        self.flip_vertical_button=ft.Button("Flip Vertical",on_click=lambda e:self.selection.flip(True),
+            tooltip="Mirror selection top/bottom; click again to revert")
+        inspector.controls.insert(inspector.controls.index(self.mirror)+1,self.flip_vertical_button)
         inspector.controls[-1].value += "\nArrow keys move the selected object: 1 unit; Shift+arrow: 10 units; Ctrl+arrow: 0.1 unit. Grid snapping does not limit keyboard nudges."
         inspector.controls.insert(1,self.blocks)
         inspector.controls.insert(2,self.length)
@@ -160,6 +163,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
                 ft.Button("Select structure",on_click=lambda e:self.selection.select_structure(),tooltip="Temporary smart selection; does not group objects"),
                 ft.Button("Copy",on_click=lambda e:self.selection.copy(),tooltip="Ctrl+C"),
                 ft.Button("Paste",on_click=lambda e:self.selection.paste(),tooltip="Ctrl+V"),
+                ft.Button("Flip Horizontal",on_click=lambda e:self.selection.flip(False),tooltip="Mirror selection left/right; flip again to revert"),
                 self.properties_button,ft.Button("Floor references",on_click=self.reference_settings),
                 self.building_actions,
                 self.reference_label,ft.Button("Edit selected draft",on_click=self.edit_saved_draft)]),
@@ -235,12 +239,12 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         controls=[self.selected_label,self.object_picker,self.floor_picker,self.owner,self.status,self.reference_label,
             self.building_actions,self.selected_building_name,self.edit_building_button,
             self.undo_button,self.redo_button,self.duplicate_button,self.delete_button,self.map_size_button,
-            self.map_width,self.map_height,self.mirror,self.blocks,self.length,self.floor_count,self.fade,self.approach,
+            self.map_width,self.map_height,self.mirror,self.flip_vertical_button,self.blocks,self.length,self.floor_count,self.fade,self.approach,
             self.railings.control,self.railings.slider,
             self.collision_editor.control,self.collision_editor.field,self.collision_editor.slider,
             self.stair_editor.control,self.stair_editor.source,self.stair_editor.target,self.stair_editor.direction,
-            self.stair_editor.enabled,self.stair_editor.right,self.stair_editor.right_direction,self.stair_editor.right_target,
-            self.stair_editor.right_enabled,self.stair_editor.speed,*self.properties.values(),*self.tool_buttons.values()]
+            self.stair_editor.enabled,self.stair_editor.connection_controls,
+            self.stair_editor.speed,*self.properties.values(),*self.tool_buttons.values()]
         result={}
         for control in controls:
             state=tuple(getattr(control,key,None) for key in ("value","visible","disabled","bgcolor","content"))
@@ -339,6 +343,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             if len(selected_items)>1: self.selected_label.value=f"{len(selected_items)} objects selected (move together)"
             for field in [*self.properties.values(),self.mirror,self.blocks,self.length,self.floor_count]:
                 field.disabled=item is None or self.move_mode or len(selected_items)>1
+            self.flip_vertical_button.disabled=not selected_items or self.selection.locked()
             self.length.visible=bool(item and item.kind in LINE_KINDS)
             self.railings.sync(item,len(selected_items)>1)
             self.collision_editor.sync(item,len(selected_items)>1)
@@ -761,6 +766,9 @@ class MapWorkspaceEditor(BuildingDraftEditor):
 
     def change_scope(self,scope):
         self.cancel_gesture(update=False)
+        # Inspector fields may be hidden/rebuilt without emitting on_blur.
+        # A floor-button change must not leave Ctrl+C/V blocked by stale focus.
+        self.shortcuts.text_focused=False
         self.document.floors.setdefault(scope,[])
         self.floor=scope
         self.selected=None
@@ -836,7 +844,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             if item.layer_style and count!=item.floor_count: raise ValueError("Existing floor images determine this building's floor count")
             if count<item.floor_count and any(self.document.floors.get(scope_key(item,f"Floor {n}")) for n in range(count+1,item.floor_count+1)):
                 raise ValueError("Delete objects on the higher floors before reducing floor count")
-            if count<item.floor_count and any(i.kind in STAIR_KINDS and any(t is not None and t>count for t in (i.stair_to,i.stair_right_to))
+            if count<item.floor_count and any(i.kind in STAIR_KINDS and i.stair_to is not None and i.stair_to>count
                     for n in range(1,count+1) for i in self.document.floors.get(scope_key(item,f"Floor {n}"),[])):
                 raise ValueError("Change stairs leading to deleted floors first, or use Remove current floor")
             changed=replace(item,**values,mirrored=self.mirror.value,blocking=self.blocks.value if item.kind in COLLISION_KINDS else item.blocking,floor_count=count,

@@ -8,7 +8,7 @@ from drafting.models import railing_profile
 
 OPENING_KINDS = {"door", "double_door", "opening"}
 WALL_KINDS = {"wall", "room"}
-COLLISION_KINDS = WALL_KINDS | {"railing","stairs","double_stairs"}
+COLLISION_KINDS = WALL_KINDS | {"railing","stairs"}
 
 
 def collision_thickness(item):
@@ -200,12 +200,10 @@ def barriers_for_item(item,openings=()):
     if item.kind == "railing":
         return (Barrier(item.local_to_world(0,0),item.local_to_world(item.width,item.height),
                         collision_thickness(item)/2),)
-    if item.kind in {"stairs","double_stairs"} and item.collision_thickness is not None:
+    if item.kind == "stairs" and item.collision_thickness is not None:
         # Stairs stay walkable on the treads. Optional side barriers keep
         # the player in the corridor without blocking the ends.
         lines=[((0,0),(0,item.height)),((item.width,0),(item.width,item.height))]
-        if item.kind=="double_stairs":
-            lines.append(((item.width/2,min(24,item.height/5)),(item.width/2,item.height)))
         return tuple(Barrier(item.local_to_world(*a),item.local_to_world(*b),collision_thickness(item)/2,flat=True)
             for a,b in lines)
     return ()

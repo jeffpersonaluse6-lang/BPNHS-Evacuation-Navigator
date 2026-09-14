@@ -75,7 +75,7 @@ class MapScene(DraftDocument):
         assets = ({i:source for i,(_,source) in enumerate(BUILDING_LAYER_STYLES[parent.layer_style].layers,1)}
                   if parent.layer_style else {i:parent.image_src or "" for i in range(1,parent.floor_count+1)})
         items=self.floors.get(scope_key(parent,"Floor 1"),[])
-        stair=next((i for i in items if i.kind in {"stairs","double_stairs"}),None)
+        stair=next((i for i in items if i.kind == "stairs"),None)
         area=Rect(stair.x,stair.y,stair.width,stair.height) if stair else (original.stair_area if original else Rect(0,0,0,0))
         flip=BUILDING_LAYER_STYLES[parent.layer_style].flip_vertical if parent.layer_style else False
         return Building(parent.text,area,assets,flip)
@@ -124,11 +124,11 @@ class MapScene(DraftDocument):
                 while ancestor and ancestor in parents:
                     if ancestor in seen: raise ValueError("Attachment parent cycle")
                     seen.add(ancestor); ancestor=parents[ancestor]
-                if parent and scope.split(":",1)[1].startswith("Floor ") and item.kind in {"stairs","double_stairs"}:
+                if parent and scope.split(":",1)[1].startswith("Floor ") and item.kind == "stairs":
                     source=int(scope.split()[-1])
                     if item.stair_from is not None and item.stair_from!=source:
                         raise ValueError("Stair From Floor must match its stored floor layer")
-                    for direction,target in ((item.stair_direction,item.stair_to),(item.stair_right_direction,item.stair_right_to)):
+                    for direction,target in ((item.stair_direction,item.stair_to),):
                         if target is not None and (target>parent.floor_count or target==source or
                                 (direction=="up")!=(target>source)):
                             raise ValueError("Stair destination must exist and agree with its up/down direction")

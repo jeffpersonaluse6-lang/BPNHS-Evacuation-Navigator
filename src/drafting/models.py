@@ -9,7 +9,7 @@ import uuid
 from .roof import roof_seams
 
 KINDS = {"room", "rectangle", "floor", "ellipse", "wall", "line", "door", "double_door",
-         "opening", "window", "stairs", "double_stairs", "text", "dimension", "roof", "railing", "building", "entry_zone"}
+         "opening", "window", "stairs", "text", "dimension", "roof", "railing", "building", "entry_zone"}
 
 
 @dataclass(frozen=True)
@@ -36,9 +36,7 @@ class DraftItem:
     group_id: str | None = None
     parent_id: str | None = None
     stair_direction: str = "up"
-    stair_right_direction: str = "down"
     stair_to: int | None = None
-    stair_right_to: int | None = None
     completed_floors: tuple = ()
     approach_distance: float = 80
     fade_when_obstructing: bool = True
@@ -50,7 +48,6 @@ class DraftItem:
     free_build: bool = False
     stair_from: int | None = None
     stair_enabled: bool = True
-    stair_right_enabled: bool = True
     stair_speed_multiplier: float | None = None
     # Physical collision width; None uses legacy defaults.
     collision_thickness: float | None = None
@@ -145,25 +142,16 @@ def primitives(item):
     elif item.kind == "window":
         box(0,0,w,h,"#FFFFFF")
         line([(0,h/2),(w,h/2)])
-    elif item.kind in {"stairs", "double_stairs"}:
+    elif item.kind == "stairs":
         box(0,0,w,h,"#FFFFFF")
-        landing = min(24,h/5) if item.kind == "double_stairs" else 0
-        # Shade each tread individually, keeping outlines and landing intact.
-        gap=min(3,w/8)
-        sections = [(0,w,item.stair_direction)] if not landing else [
-            (0,w/2-gap,item.stair_direction),(w/2+gap,w/2-gap,item.stair_right_direction)]
-        for x,sw,direction in sections:
-            for i in range(item.steps):
-                depth = (1-i/max(1,item.steps-1)) if direction=="up" else i/max(1,item.steps-1)
-                shade = round(248-62*depth)
-                color = f"#{shade:02x}{shade:02x}{shade:02x}"
-                box(x,landing+(h-landing)*i/item.steps,sw,(h-landing)/item.steps,color,color,0)
+        for i in range(item.steps):
+            depth = (1-i/max(1,item.steps-1)) if item.stair_direction=="up" else i/max(1,item.steps-1)
+            shade = round(248-62*depth)
+            color = f"#{shade:02x}{shade:02x}{shade:02x}"
+            box(0,h*i/item.steps,w,h/item.steps,color,color,0)
         for i in range(1,item.steps):
-            y = landing + (h-landing)*i/item.steps
+            y = h*i/item.steps
             line([(0,y),(w,y)])
-        if landing:
-            line([(0,landing),(w,landing)])
-            box(w/2-3,landing,6,h-landing,"#FFFFFF")
     elif item.kind == "text":
         text(0,0,item.text)
     elif item.kind == "dimension":
@@ -212,14 +200,14 @@ def validate_item(item):
             raise ValueError("Invalid structure relationship")
     if item.stair_from is not None and (type(item.stair_from) is not int or item.stair_from<1):
         raise ValueError("Stair From Floor must be a positive floor number")
-    if type(item.stair_enabled) is not bool or type(item.stair_right_enabled) is not bool:
+    if type(item.stair_enabled) is not bool:
         raise ValueError("Stair transition enabled must be a boolean")
     if item.stair_speed_multiplier is not None and (type(item.stair_speed_multiplier) not in (int,float)
             or not math.isfinite(item.stair_speed_multiplier) or not .25<=item.stair_speed_multiplier<=1):
         raise ValueError("Stair speed multiplier must be between 0.25 and 1")
-    if item.stair_direction not in {"up","down"} or item.stair_right_direction not in {"up","down"}:
+    if item.stair_direction not in {"up","down"}:
         raise ValueError("Stair direction must be up or down")
-    for target in (item.stair_to,item.stair_right_to):
+    for target in (item.stair_to,):
         if target is not None and (type(target) is not int or target<1):
             raise ValueError("Stair destination must be a positive floor number")
     if (not isinstance(item.completed_floors,(tuple,list)) or

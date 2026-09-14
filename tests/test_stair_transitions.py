@@ -3,6 +3,7 @@
 from dataclasses import asdict,replace
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 import unittest
 from unittest.mock import patch
@@ -68,17 +69,17 @@ class AutomaticStairRuntimeTests(unittest.TestCase):
         self.assertIsNone(self.nav.transition)
         self.visit((260,345),(260,340),(260,220));self.assertIsNotNone(self.nav.transition)
 
-    def test_double_stair_flights_have_independent_floor_connections(self):
-        stair=replace(self.stair,kind="double_stairs",width=240,stair_to=2,
-            stair_right_direction="up",stair_right_to=4)
+    def test_disabled_stair_remains_walkable_without_floor_or_opacity_changes(self):
+        stair=replace(self.stair,stair_enabled=False,stair_speed_multiplier=1)
         self.scene.floors[scope_key(self.parent,"Floor 1")]=[stair]
-        for x,target in ((250,2),(380,4)):
-            nav=WorldNavigator(self.scene,NavigationState());nav.enter(self.parent)
-            for y in (345,340,220,124):nav.update(self.scene.project(scope_key(self.parent,"Floor 1"),x,y))
-            self.assertEqual(nav.state.floor,target)
-        sections=transitions(stair,1,4)
-        self.assertFalse(section_progress(sections[0],stair.local_to_world(120,200))[1])
-        self.assertFalse(section_progress(sections[1],stair.local_to_world(120,200))[1])
+        nav=WorldNavigator(self.scene,NavigationState(collision_radius=1));nav.enter(self.parent)
+        start=self.scene.project(scope_key(self.parent,"Floor 1"),260,345)
+        end=nav.move(start,0,-250)
+        self.assertAlmostEqual(end[1],start[1]-250)
+        self.assertEqual(nav.state.floor,1);self.assertIsNone(nav.transition)
+        self.assertEqual(nav.active_floor_opacities(),{1:1.})
+        self.assertEqual(nav.phase,TransitionPhase.ON_FLOOR)
+        self.assertFalse(nav.exit_areas);self.assertFalse(nav.candidates())
 
     def test_stair_rotation_mirror_resize_and_parent_scale_define_activation_geometry(self):
         for rotation,mirrored,width,height in ((0,False,120,240),(90,True,200,400),(37,False,80,200)):
@@ -136,7 +137,7 @@ class StairEditorTests(unittest.TestCase):
         updater=patch.object(ft.Control,"update");updater.start();self.addCleanup(updater.stop)
         self.owner=MapWorkspaceEditor(page_stub(),MapScene());self.owner.choose_tool("building")
         self.editor=self.owner.builder
-        self.stair=self.editor.create_item("double_stairs",200,100,240,240)
+        self.stair=self.editor.create_item("stairs",200,100,240,240)
         self.editor.items().append(self.stair);self.editor.floor_done()
         self.editor.change_scope(scope_key(self.editor.building(),"Floor 1"))
         self.editor.selection.select({self.stair.id},False);self.editor.refresh(properties=True)
@@ -147,13 +148,43 @@ class StairEditorTests(unittest.TestCase):
         self.assertFalse(hasattr(self.editor,"activator_editor"));self.assertFalse(hasattr(self.editor,"show_activators"))
         self.assertFalse(any(k.startswith("activator_") for k in asdict(self.stair)))
         self.assertTrue(self.editor.stair_editor.control.visible)
+        from drafting.editor import TOOLS,STAMP_SIZES
+        for tools in (KINDS,dict(MAP_TOOLS),dict(TOOLS),STAMP_SIZES):
+            self.assertNotIn("double_stairs",tools)
+        self.assertFalse(any(k.startswith("stair_right_") for k in asdict(self.stair)))
+        with self.assertRaises(ValueError):validate_item(DraftItem("double_stairs",0,0,120,240))
 
-    def test_configure_both_flights_speed_and_roundtrip(self):
+    def test_enable_checkbox_is_immediate_preserves_geometry_and_supports_undo_redo(self):
+        inspector=self.editor.stair_editor;before=self.editor.selected_item()
+        inspector.toggle_enabled(SimpleNamespace(control=SimpleNamespace(value=False)))
+        disabled=self.editor.selected_item()
+        self.assertEqual(disabled,replace(before,stair_enabled=False))
+        self.assertFalse(inspector.enabled.value)
+        from map.stair_editor import transition_shapes
+        self.assertFalse(transition_shapes(disabled,self.editor.parent(),1))
+        saved=MapScene.from_json(self.editor.document.to_json())
+        self.assertEqual(saved.floors[self.editor.floor],[disabled])
+        self.editor.history(False);self.assertEqual(self.editor.items(),[before])
+        self.editor.history(True);self.assertEqual(self.editor.items(),[disabled])
+        self.editor.selection.select({before.id},False);self.editor.refresh(properties=True)
+        inspector.toggle_enabled(SimpleNamespace(control=SimpleNamespace(value=True)))
+        self.assertEqual(self.editor.selected_item(),before)
+
+    def test_campus_stair_also_has_enable_checkbox(self):
+        editor=MapWorkspaceEditor(page_stub(),MapScene());stair=DraftItem("stairs",200,100,80,160)
+        editor.document.floors[CAMPUS].append(stair)
+        editor.selection.select({stair.id},False);editor.refresh(properties=True)
+        self.assertTrue(editor.stair_editor.control.visible)
+        self.assertFalse(editor.stair_editor.connection_controls.visible)
+        editor.stair_editor.toggle_enabled(SimpleNamespace(control=SimpleNamespace(value=False)))
+        self.assertEqual(editor.selected_item(),replace(stair,stair_enabled=False))
+
+    def test_configure_stair_speed_and_roundtrip(self):
         inspector=self.editor.stair_editor
-        inspector.target.value="2";inspector.right_direction.value="up";inspector.right_target.value="2"
+        inspector.target.value="2"
         inspector.speed.value="0.5";inspector.apply()
         changed=self.editor.selected_item()
-        self.assertEqual((changed.stair_from,changed.stair_to,changed.stair_right_to),(1,2,2))
+        self.assertEqual((changed.stair_from,changed.stair_to),(1,2))
         self.assertEqual(changed.stair_speed_multiplier,.5)
         saved=MapScene.from_json(self.editor.document.to_json())
         self.assertEqual(saved.snapshot(),self.editor.document.snapshot())
@@ -161,7 +192,7 @@ class StairEditorTests(unittest.TestCase):
 
     def test_change_from_floor_moves_stair_without_moving_rotating_or_resizing_it(self):
         inspector=self.editor.stair_editor;inspector.source.value="2";inspector.direction.value="down"
-        inspector.target.value="1";inspector.right_enabled.value=False;inspector.apply()
+        inspector.target.value="1";inspector.apply()
         changed=self.editor.selected_item()
         self.assertEqual((changed.x,changed.y,changed.width,changed.height,changed.rotation),
             (self.stair.x,self.stair.y,self.stair.width,self.stair.height,self.stair.rotation))
@@ -223,9 +254,9 @@ class StairEditorTests(unittest.TestCase):
 class LegacyStairMigrationTests(unittest.TestCase):
     def data(self,double=False):
         scene,parent,stair=simple_scene()
-        if double:stair=replace(stair,kind="double_stairs",width=240)
         raw=json.loads(scene.to_json());scope=scope_key(parent,"Floor 1")
         raw["floors"][scope]=[asdict(stair)]
+        if double:raw["floors"][scope][0].update(kind="double_stairs",width=240)
         raw["floors"][scope].append({"kind":"floor_activator","x":200,"y":100,"width":100,"height":240,
             "activator_from":1,"activator_to":2,"activator_stair":None,"stair_direction":"up","id":"old-zone"})
         return raw,parent,stair
@@ -237,11 +268,12 @@ class LegacyStairMigrationTests(unittest.TestCase):
         self.assertNotIn("activator_",loaded.to_json());self.assertNotIn("floor_activator",loaded.to_json())
         self.assertEqual(MapScene.from_json(loaded.to_json()).snapshot(),loaded.snapshot())
 
-    def test_two_old_zones_migrate_to_independent_double_stair_flights(self):
+    def test_two_old_zones_migrate_to_independent_normal_stairs(self):
         raw,parent,stair=self.data(double=True);scope=scope_key(parent,"Floor 1")
         raw["floors"][scope].append({**raw["floors"][scope][-1],"id":"old-right","x":330,"activator_to":4})
-        loaded=MapScene.from_json(json.dumps(raw));item=loaded.floors[scope][0]
-        self.assertEqual((item.stair_to,item.stair_right_to),(2,4));self.assertEqual(item.stair_right_direction,"up")
+        loaded=MapScene.from_json(json.dumps(raw));stairs=[i for i in loaded.floors[scope] if i.kind=="stairs"]
+        self.assertEqual([i.stair_to for i in stairs],[2,4]);self.assertEqual(stairs[1].stair_direction,"up")
+        self.assertNotIn("double_stairs",loaded.to_json());self.assertNotIn("stair_right_",loaded.to_json())
 
     def test_conflicting_connections_fail_instead_of_silently_losing_data(self):
         raw,parent,stair=self.data();scope=scope_key(parent,"Floor 1")
@@ -257,6 +289,59 @@ class LegacyStairMigrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):validate_item(DraftItem("floor_activator",0,0,100,100))
         for value in (0,1.1,float("nan"),True):
             with self.assertRaises(ValueError):validate_item(DraftItem("stairs",0,0,100,100,stair_speed_multiplier=value))
+
+    def test_legacy_double_is_one_way_import_preserving_rotated_mirrored_flights(self):
+        for mirrored in (False,True):
+            scene,parent,stair=simple_scene();scope=scope_key(parent,"Floor 1")
+            original=replace(stair,width=240,rotation=37,mirrored=mirrored,stair_enabled=False)
+            raw=json.loads(scene.to_json())
+            raw["floors"][scope]=[{**asdict(original),"kind":"double_stairs",
+                "stair_right_direction":"up","stair_right_to":4,"stair_right_enabled":True}]
+            loaded=MapScene.from_json(json.dumps(raw));items=loaded.floors[scope]
+            left,right=[i for i in items if i.kind=="stairs"]
+            self.assertEqual(left.id,original.id);self.assertIsNone(left.group_id);self.assertIsNone(right.group_id)
+            self.assertFalse(left.stair_enabled);self.assertTrue(right.stair_enabled)
+            self.assertEqual((left.stair_to,right.stair_to),(2,4))
+            for flight,x in ((left,0),(right,123)):
+                for dx,dy in ((0,0),(117,216),(58.5,108)):
+                    actual=flight.local_to_world(dx,dy);expected=original.local_to_world(x+dx,24+dy)
+                    for a,b in zip(actual,expected):self.assertAlmostEqual(a,b)
+            canonical=loaded.to_json()
+            self.assertNotIn('"double_stairs"',canonical);self.assertNotIn('stair_right_',canonical)
+            self.assertEqual(MapScene.from_json(canonical).snapshot(),loaded.snapshot())
+
+    def test_disabled_stair_keeps_physical_barriers(self):
+        from navigation.collision import barriers_for
+        enabled=DraftItem("stairs",0,0,120,240,collision_thickness=12)
+        disabled=replace(enabled,stair_enabled=False)
+        self.assertEqual(barriers_for([enabled]),barriers_for([disabled]))
+        self.assertTrue(barriers_for([disabled]))
+
+    def test_legacy_physical_stair_preserves_outer_and_center_collision(self):
+        from navigation.collision import barriers_for
+        scene,parent,stair=simple_scene();scope=scope_key(parent,"Floor 1")
+        original=replace(stair,width=240,rotation=37,mirrored=True,collision_thickness=12)
+        raw=json.loads(scene.to_json());raw["floors"][scope]=[{**asdict(original),"kind":"double_stairs"}]
+        loaded=MapScene.from_json(json.dumps(raw));barriers=barriers_for(loaded.floors[scope])
+        self.assertEqual(len(barriers),3)
+        expected=((original.local_to_world(0,0),original.local_to_world(0,240)),
+            (original.local_to_world(240,0),original.local_to_world(240,240)),
+            (original.local_to_world(120,24),original.local_to_world(120,240)))
+        for barrier,(start,end) in zip(barriers,expected):
+            self.assertEqual(barrier.radius,6)
+            for actual,wanted in ((barrier.start,start),(barrier.end,end)):
+                for a,b in zip(actual,wanted):self.assertAlmostEqual(a,b)
+
+    def test_standalone_draft_checkbox_preserves_stair_and_undo(self):
+        from drafting.editor import BuildingDraftEditor
+        with patch.object(ft.Control,"update"):
+            editor=BuildingDraftEditor(page_stub());stair=DraftItem("stairs",20,30,80,160,collision_thickness=12)
+            editor.document.floors[editor.floor]=[stair];editor.selected=stair.id;editor.refresh(properties=True)
+            self.assertTrue(editor.stair_enabled.visible)
+            editor.toggle_stair_enabled(SimpleNamespace(control=SimpleNamespace(value=False)))
+            self.assertEqual(editor.items(),[replace(stair,stair_enabled=False)])
+            editor.history(False);self.assertEqual(editor.items(),[stair])
+            editor.history(True);self.assertEqual(editor.items(),[replace(stair,stair_enabled=False)])
 
 
 if __name__=="__main__":unittest.main()

@@ -213,11 +213,11 @@ class BuildingEditor(MapWorkspaceEditor):
                 children=[]
                 for item in items:
                     targets={}
-                    if item.kind in {"stairs","double_stairs"}:targets["stair_from"]=dest
-                    for key in ("stair_to","stair_right_to"):
+                    if item.kind == "stairs":targets["stair_from"]=dest
+                    for key in ("stair_to",):
                         target=getattr(item,key)
                         targets[key]=None if target==number else target-1 if target and target>number else target
-                        if target==number:targets["stair_enabled" if key=="stair_to" else "stair_right_enabled"]=False
+                        if target==number:targets["stair_enabled"]=False
                     children.append(replace(item,**targets))
                 self.document.floors[scope_key(parent,f"Floor {dest}")]=children
             self.update_parent(replace(parent,floor_count=parent.floor_count-1,
@@ -285,12 +285,12 @@ class BuildingEditor(MapWorkspaceEditor):
         for original,item in zip(originals,copies):
             targets={key:(getattr(item,key)+1 if getattr(item,key) is not None and
                           getattr(item,key)<self.building().floor_count else None)
-                     for key in ("stair_to","stair_right_to")}
-            if item.kind in {"stairs","double_stairs"}:
+                     for key in ("stair_to",)}
+            if item.kind == "stairs":
                 targets["stair_from"]=number
-                for key in ("stair_to","stair_right_to"):
+                for key in ("stair_to",):
                     if getattr(item,key) is not None and targets[key] is None:
-                        targets["stair_enabled" if key=="stair_to" else "stair_right_enabled"]=False
+                        targets["stair_enabled"]=False
             adjusted.append(replace(item,**targets,parent_id=self.building_id if original.parent_id==self.building_id else item.parent_id))
         def copy(): self.modify(lambda:self.document.floors.__setitem__(self.floor,adjusted))
         if self.items(): self.confirm("Replace this floor with a copy of this building's previous floor?",copy)

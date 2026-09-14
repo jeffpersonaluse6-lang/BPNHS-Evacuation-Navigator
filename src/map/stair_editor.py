@@ -13,16 +13,25 @@ class StairEditor:
         self.source=ft.Dropdown(label="From Floor",on_select=self.change_source)
         self.direction=ft.Dropdown(label="Direction: Up / Down",options=self.directions(),on_select=self.change_direction)
         self.target=ft.Dropdown(label="To Floor")
-        self.enabled=ft.Checkbox(label="Left / single flight transition enabled",value=True)
-        self.right_direction=ft.Dropdown(label="Right flight: Up / Down",options=self.directions(),on_select=self.change_direction)
-        self.right_target=ft.Dropdown(label="Right flight To Floor")
-        self.right_enabled=ft.Checkbox(label="Right flight transition enabled",value=True)
+        self.enabled=ft.Checkbox(label="Enable Stair Activator",value=True,on_change=self.toggle_enabled)
         self.speed=ft.TextField(label="Stair speed multiplier (blank = player setting)",dense=True)
-        self.right=ft.Column(controls=[self.right_direction,self.right_target,self.right_enabled])
+        self.connection_controls=ft.Column(controls=[self.source,self.direction,self.target,self.speed,
+            ft.Button("Apply stair settings",on_click=self.apply)])
         self.control=ft.Column(visible=False,controls=[ft.Text("Stair floor transition",weight=ft.FontWeight.BOLD),
-            self.source,self.direction,self.target,self.enabled,self.right,self.speed,
-            ft.Button("Apply stair settings",on_click=self.apply),
+            self.enabled,self.connection_controls,
             ft.Text("Invisible walking areas follow this stair. Enter at the arrow tail. After arrival, leave the entire staircase before another transition. No separate zone is needed.",size=11)])
+
+    def toggle_enabled(self,event=None):
+        editor=self.editor;item=editor.selected_item()
+        if editor.selection.locked() or not item or item.kind!="stairs" or len(editor.selection.items())!=1:return
+        enabled=self.enabled.value
+        if event is not None:enabled=event.control.value
+        if type(enabled) is not bool:return
+        changed=replace(item,stair_enabled=enabled)
+        editor.modify(lambda:editor.document.floors.__setitem__(editor.floor,
+            [changed if i.id==item.id else i for i in editor.items()]))
+        editor.status.value="Stair Activator enabled" if enabled else "Stair Activator disabled — visual and collision settings unchanged"
+        editor.page.update(editor.status)
 
     @staticmethod
     def directions():return [ft.DropdownOption(k,k.title()) for k in ("up","down")]
@@ -31,30 +40,30 @@ class StairEditor:
         parent=self.editor.parent()
         if not parent:return
         source=int(self.source.value or 1)
-        for field,direction in ((self.target,self.direction.value),(self.right_target,self.right_direction.value)):
+        for field,direction in ((self.target,self.direction.value),):
             options=[("","Adjacent floor (automatic)")]+[(str(n),f"Floor {n}") for n in range(1,parent.floor_count+1)
                 if n!=source and (direction=="up")== (n>source)]
             self.editor.dropdown_options(field,options)
             if field.value not in {value for value,_ in options}:field.value=""
 
     def change_source(self,event=None):
-        self.target_options();self.editor.page.update(self.target,self.right_target)
+        self.target_options();self.editor.page.update(self.target)
 
     def change_direction(self,event=None):self.change_source()
 
     def sync(self,item,multiple):
         parent=self.editor.parent()
         numbered=parent is not None and ":Floor " in self.editor.floor
-        self.control.visible=bool(item and item.kind in STAIR_KINDS and numbered)
+        self.control.visible=bool(item and item.kind in STAIR_KINDS)
         self.control.disabled=multiple or self.editor.move_mode
         if not self.control.visible:return
+        self.enabled.value=item.stair_enabled
+        self.connection_controls.visible=numbered
+        if not numbered:return
         self.editor.dropdown_options(self.source,[(str(n),f"Floor {n}") for n in range(1,parent.floor_count+1)])
         self.source.value=str(item.stair_from or int(self.editor.floor.split()[-1]))
-        self.direction.value=item.stair_direction;self.right_direction.value=item.stair_right_direction
+        self.direction.value=item.stair_direction
         self.target.value=str(item.stair_to) if item.stair_to is not None else ""
-        self.right_target.value=str(item.stair_right_to) if item.stair_right_to is not None else ""
-        self.enabled.value=item.stair_enabled;self.right_enabled.value=item.stair_right_enabled
-        self.right.visible=item.kind=="double_stairs"
         self.speed.value="" if item.stair_speed_multiplier is None else f"{item.stair_speed_multiplier:g}"
         self.target_options()
 
@@ -66,12 +75,9 @@ class StairEditor:
             if not 1<=source<=parent.floor_count:raise ValueError("Choose an existing From Floor")
             changed=replace(item,stair_from=source,stair_to=int(self.target.value) if self.target.value else None,
                 stair_direction=self.direction.value,stair_enabled=self.enabled.value,
-                stair_right_to=int(self.right_target.value) if self.right_target.value else None,
-                stair_right_direction=self.right_direction.value,stair_right_enabled=self.right_enabled.value,
                 stair_speed_multiplier=float(self.speed.value) if self.speed.value.strip() else None)
             validate_item(changed)
             pairs=[(changed.stair_direction,changed.stair_to)]
-            if changed.kind=="double_stairs":pairs.append((changed.stair_right_direction,changed.stair_right_to))
             for direction,target in pairs:
                 if target is not None and (not 1<=target<=parent.floor_count or target==source or (direction=="up")!=(target>source)):
                     raise ValueError("To Floor must exist and agree with Up / Down")

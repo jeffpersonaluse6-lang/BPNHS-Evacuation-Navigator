@@ -7,6 +7,8 @@ import re
 from .alignment import bounds,snap_transform
 from .scene import CAMPUS,scope_key
 from .scene_renderer import path_shape,project
+from .clipboard import SelectionClipboard,rebind_floor_items
+from .flips import flip_items
 
 
 def owner_for(item,items):
@@ -243,11 +245,14 @@ class SelectionController:
 
     def copy(self):
         editor=self.editor
+        if self.locked():return
+        if editor.interaction is not None:editor.pointer_up()
         roots=self.items()
         if not roots: return
         building_ids={i.id for i in roots if i.kind=="building"}
         floors={k:tuple(v) for k,v in editor.document.floors.items() if k.split(":",1)[0] in building_ids}
-        self.clipboard=(tuple(roots),floors,editor.parent() is not None)
+        parent=editor.parent()
+        self.clipboard=SelectionClipboard(tuple(roots),floors,editor.floor,parent.id if parent else None)
         editor.status.value=f"Copied {len(roots)} selected objects and their building layers."
         editor.refresh()
 
@@ -256,30 +261,18 @@ class SelectionController:
         editor=self.editor
         if not self.clipboard: return
         if getattr(editor,"building_session",False) and editor.floor==CAMPUS: return
-        roots,floors,on_floor=self.clipboard
+        clipboard=self.clipboard
+        roots,floors,on_floor=clipboard.roots,clipboard.floors,clipboard.on_floor
         if (editor.parent() is not None)!=on_floor:
             editor.status.value="Paste floor components onto a building floor, or buildings onto Campus."
             editor.refresh(); return
+        originals=roots
         roots,floors=clone_bundle(roots,floors)
+        disabled=0
         if on_floor:
-            source=int(editor.floor.split()[-1]) if ":Floor " in editor.floor else None
-            adjusted=[]
-            for item in roots:
-                if item.kind in {"stairs","double_stairs"}:
-                    if source is None:
-                        item=replace(item,stair_from=None,stair_enabled=False,stair_right_enabled=False)
-                    else:
-                        offset=source-(item.stair_from or source);changes={"stair_from":source}
-                        for key in ("stair_to","stair_right_to"):
-                            target=getattr(item,key)
-                            if target is not None:
-                                target+=offset
-                                if not 1<=target<=editor.parent().floor_count:
-                                    editor.status.value="Pasted stair would lead to a missing floor. Add that floor first.";editor.refresh();return
-                            changes[key]=target
-                        item=replace(item,**changes)
-                adjusted.append(item)
-            roots=adjusted
+            roots,disabled=rebind_floor_items(originals,roots,clipboard,editor.floor,editor.parent())
+        cross_floor=on_floor and editor.floor!=clipboard.source_scope and not duplicate
+        offset=0 if cross_floor else 24
         copied=[]
         used={b.text for b in editor.document.buildings()}
         for item in roots:
@@ -290,13 +283,29 @@ class SelectionController:
                 while label in used:
                     n+=1; label=f"{base} (copy {n})"
                 used.add(label)
-            copied.append(replace(item,x=item.x+24,y=item.y+24,text=label))
+            copied.append(replace(item,x=item.x+offset,y=item.y+offset,text=label))
         roots=copied
         def add():
             editor.items().extend(roots)
             editor.document.floors.update(floors)
             self.select({i.id for i in roots},False)
         editor.modify(add)
+        editor.status.value=f"Pasted {len(roots)} new objects onto {editor.floor.split(':',1)[-1]}."
+        if disabled:editor.status.value+=f" Disabled {disabled} stair connection(s) to unavailable floors; configure them here."
+        editor.page.update(editor.status)
+
+    def flip(self,vertical=True):
+        if self.locked():return
+        editor=self.editor
+        if editor.interaction is not None:editor.pointer_up()
+        updates=flip_items(self.items(),vertical)
+        if not updates:return
+        from drafting.models import validate_item
+        for item in updates.values():validate_item(item)
+        editor.modify(lambda:editor.document.floors.__setitem__(editor.floor,
+            [updates.get(i.id,i) for i in editor.items()]))
+        editor.status.value="Flipped vertically" if vertical else "Flipped horizontally"
+        editor.page.update(editor.status)
 
     def duplicate(self):
         self.copy()

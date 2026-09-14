@@ -44,7 +44,7 @@ class EditorDemoPreview(EvacuationApp):
         parent=self.navigator.parent
         if parent:
             for item in self.scene.floors.get(scope_key(parent,f"Floor {self.state.floor}"),[]):
-                if item.kind in {"stairs","double_stairs","entry_zone"}:
+                if item.kind in {"stairs","entry_zone"}:
                     points=[project(parent,*item.local_to_world(*p)) for p in ((0,0),(item.width,0),(item.width,item.height),(0,item.height))]
                     shapes.append(path_shape(points,ft.Colors.with_opacity(.25,"#FBBF24"),fill=True,closed=True))
         self.zone_canvas.shapes=shapes

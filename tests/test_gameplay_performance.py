@@ -154,11 +154,11 @@ class StairStatePerformanceTests(unittest.TestCase):
         self.assertEqual(n.phase,TransitionPhase.ON_FLOOR)
         f.visit((222,405),(222,400))
         self.assertEqual(n.phase,TransitionPhase.ENTERING_STAIRS);self.assertEqual(n.state.floor,1)
-        f.visit((222,237));self.assertEqual(n.phase,TransitionPhase.TRANSITIONING)
+        f.visit((222,225));self.assertEqual(n.phase,TransitionPhase.TRANSITIONING)
         self.assertEqual(n.active_floor_opacities(),{1:.5,2:.5})
-        f.visit((222,74));self.assertEqual(n.phase,TransitionPhase.ARRIVED)
+        f.visit((222,50));self.assertEqual(n.phase,TransitionPhase.ARRIVED)
         self.assertEqual(n.state.floor,2);self.assertEqual(n.active_floor_opacities(),{2:1.})
-        f.visit((292,69));self.assertEqual(n.phase,TransitionPhase.WAIT_FOR_EXIT)
+        f.visit((292,48));self.assertEqual(n.phase,TransitionPhase.WAIT_FOR_EXIT)
         f.visit((292,20));self.assertEqual(n.phase,TransitionPhase.ON_FLOOR)
 
     def test_exit_frame_cannot_retroactively_trigger_previously_disarmed_zone(self):

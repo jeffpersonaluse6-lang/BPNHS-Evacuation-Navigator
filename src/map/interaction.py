@@ -115,7 +115,7 @@ class Interaction:
         selected=editor.selected_item()
         if selected and len(self.items())<=1: overlay.extend(selection_shapes(selected,self.parent))
         for item in self.items():
-            if item.kind in {"stairs","double_stairs"}: overlay.extend(editor.stair_indicator_shapes(item))
+            if item.kind == "stairs": overlay.extend(editor.stair_indicator_shapes(item))
         editor.canvas.shapes=overlay
         dirty.append(editor.canvas)
         if update: editor.page.update(*dirty)

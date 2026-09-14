@@ -59,7 +59,7 @@ class PhysicalThicknessTests(unittest.TestCase):
             self.assertEqual(wall_sections(room,(door,)),wall_sections(replace(room,collision_thickness=2),(door,)))
 
     def test_stair_side_barriers_leave_treads_and_ends_walkable(self):
-        for kind in ("stairs","double_stairs"):
+        for kind in ("stairs",):
             stair=DraftItem(kind,100,100,240,240,stroke=4)
             self.assertFalse(barriers_for_item(stair))
             barriers=barriers_for_item(replace(stair,collision_thickness=12))
