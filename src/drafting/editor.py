@@ -16,11 +16,11 @@ from editor_shortcuts import EditorShortcuts
 TOOLS = [("select","Select"),("room","Room"),("rectangle","Rectangle"),
          ("ellipse","Ellipse"),("wall","Wall"),("circle_wall","Circle Wall"),("line","Line"),("text","Text"),
          ("door","Door"),("double_door","Double door"),("opening","Opening"),
-         ("window","Window"),("stairs","Stairs"),
+         ("window","Window"),("main_gate","Main Gate"),("secondary_gate","Secondary Gate"),("stairs","Stairs"),
          ("roof","Roof"),("gazebo_roof","Gazebo Roof"),
          ("court_roof","Court Roof"),("dimension","Dimension"),("pan","Pan")]
 STAMP_SIZES = {"door":(60,60),"double_door":(120,60),"opening":(60,12),
-               "window":(80,10),"stairs":(80,160),
+               "window":(80,10),"main_gate":(260,44),"secondary_gate":(150,36),"stairs":(80,160),
                "text":(180,30),"dimension":(160,30),"roof":(320,200),
                "circle_wall":(300,300),"gazebo_roof":(320,320),"court_roof":(800,450)}
 
@@ -75,6 +75,7 @@ class BuildingDraftEditor:
                          ("fill","Fill (#RRGGBB or none)","none"))}
         self.mirror=ft.Checkbox(label="Mirror horizontally",value=False)
         self.stair_enabled=ft.Checkbox(label="Enable Stair Activator",value=True,visible=False,on_change=self.toggle_stair_enabled)
+        self.gate_open=ft.Checkbox(label="Gate open",value=False,visible=False,on_change=self.toggle_gate_open)
         for field in [self.name,*self.properties.values()]:
             self.shortcuts.watch_text(field)
         self.selected_label=ft.Text("No object selected",weight=ft.FontWeight.BOLD)
@@ -87,7 +88,7 @@ class BuildingDraftEditor:
                                         min_scale=.3,max_scale=4,boundary_margin=ft.Margin.all(500))
         self.sidebar=ft.Container(visible=False,width=225,padding=10,bgcolor="#F8FAFC",content=ft.Column(
             scroll=ft.ScrollMode.AUTO,controls=[self.selected_label]+list(self.properties.values())+[
-                self.mirror,self.stair_enabled,ft.Button("Apply properties",on_click=self.apply_properties),
+                self.mirror,self.stair_enabled,self.gate_open,ft.Button("Apply properties",on_click=self.apply_properties),
                 ft.Row(wrap=True,controls=[ft.Button("Rotate 90°",on_click=lambda event:self.rotate()),
                     ft.Button("Duplicate",on_click=self.duplicate),ft.Button("Delete",on_click=self.delete)]),
                 ft.Row(wrap=True,controls=[ft.Button("Bring front",on_click=lambda event:self.reorder(True)),
@@ -152,6 +153,8 @@ class BuildingDraftEditor:
             self.selected_label.value=f"Selected: {item.kind.replace('_',' ')}" if item else "No object selected"
             self.stair_enabled.visible=bool(item and item.kind=="stairs")
             if item:self.stair_enabled.value=item.stair_enabled
+            self.gate_open.visible=bool(item and item.kind in {"main_gate","secondary_gate"})
+            if item:self.gate_open.value=item.gate_open
             if item:
                 for key,control in self.properties.items():
                     control.value=str(getattr(item,key))
@@ -181,6 +184,15 @@ class BuildingDraftEditor:
         before=self.document.snapshot();changed=replace(item,stair_enabled=event.control.value)
         self.document.floors[self.floor]=[changed if i.id==item.id else i for i in self.items()]
         self.document.remember(before);self.refresh(properties=True)
+
+    def toggle_gate_open(self,event):
+        item=self.selected_item()
+        if self.exporting or not item or item.kind not in {"main_gate","secondary_gate"} or type(event.control.value) is not bool:return
+        before=self.document.snapshot()
+        changed=replace(item,gate_open=event.control.value)
+        self.document.floors[self.floor]=[changed if i.id==item.id else i for i in self.items()]
+        self.document.remember(before)
+        self.refresh(properties=True)
 
     async def add_object(self,event=None):
         if self.exporting:

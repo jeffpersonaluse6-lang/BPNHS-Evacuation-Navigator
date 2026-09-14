@@ -4,12 +4,12 @@ from dataclasses import dataclass,replace,field
 from functools import lru_cache
 import math
 from spatial import BoundsIndex
-from drafting.models import railing_profile
+from drafting.models import railing_profile,GATE_KINDS
 from drafting.circular import ellipse_points,solid_arcs
 
 OPENING_KINDS = {"door", "double_door", "opening"}
 WALL_KINDS = {"wall", "room", "circle_wall"}
-COLLISION_KINDS = WALL_KINDS | {"railing","stairs"}
+COLLISION_KINDS = WALL_KINDS | {"railing","stairs"} | GATE_KINDS
 
 
 def collision_thickness(item):
@@ -212,6 +212,17 @@ def circular_wall_sections(item,openings,radius):
 
 @lru_cache(maxsize=4096)
 def barriers_for_item(item,openings=()):
+    if item.kind in GATE_KINDS:
+        radius=collision_thickness(item)/2
+        barriers=[
+            Barrier(item.local_to_world(0,0),item.local_to_world(0,item.height),radius,flat=True),
+            Barrier(item.local_to_world(item.width,0),item.local_to_world(item.width,item.height),radius,flat=True),
+        ]
+        if not item.gate_open:
+            barriers.append(Barrier(item.local_to_world(0,item.height/2),
+                                    item.local_to_world(item.width,item.height/2),
+                                    radius,flat=True))
+        return tuple(barriers)
     if not item.blocking:
         return ()
     if item.kind in WALL_KINDS:

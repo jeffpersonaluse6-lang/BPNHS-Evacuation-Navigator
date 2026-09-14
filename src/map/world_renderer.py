@@ -60,19 +60,27 @@ class WorldMapView:
                 (fade_roofs if item.fade_when_obstructing else solid_roofs).append(self.object_roofs.add(item,parent));continue
             target=fade_shapes if item.fade_when_obstructing else solid_shapes
             target.extend(item_shapes(item,parent,openings=context.for_wall(item)))
-        fade=ft.Container(opacity=1 if key in {1,"Roof"} else 0,
+        visible=key in {1,"Roof"}
+        fade=ft.Container(opacity=1 if visible else 0,visible=visible,
             animate_opacity=ft.Animation(140,ft.AnimationCurve.EASE_OUT) if roof else None,
             content=ft.Stack(width=self.scene.width,height=self.scene.height,controls=[base,
                 cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=fade_shapes),*fade_roofs]))
-        solid=ft.Container(opacity=1 if key in {1,"Roof"} else 0,content=cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=solid_shapes))
+        solid=ft.Container(opacity=1 if visible else 0,visible=visible,
+            content=cv.Canvas(width=self.scene.width,height=self.scene.height,shapes=solid_shapes))
         if solid_roofs:solid.content=ft.Stack(width=self.scene.width,height=self.scene.height,controls=[solid.content,*solid_roofs])
         self.layers[parent.id,key]=(fade,solid)
         return [fade,solid]
 
     def update(self,navigator,point):
         dirty=[]
-        def opacity(control,value):
-            if control.opacity!=value:control.opacity=value;dirty.append(control)
+        def set_opacity(control,value):
+            if control.opacity==value:return
+            was_visible=control.visible
+            should_show=value>0
+            if should_show and not was_visible:control.visible=True
+            control.opacity=value
+            dirty.append(control)
+            if not should_show and was_visible:control.visible=False
         current=navigator.parent.id if navigator.parent else None
         for pid in {self.previous_parent,current}-{None}:
             values=navigator.active_floor_opacities() if pid==current else {1:1.}
@@ -81,8 +89,8 @@ class WorldMapView:
                 alpha=values.get(floor,0.)
                 if alpha==previous.get(floor,0.):continue
                 fade,solid=self.layers[pid,floor]
-                opacity(fade,alpha)
-                opacity(solid,alpha)
+                set_opacity(fade,alpha)
+                set_opacity(solid,alpha)
             self.floor_values[pid]=values
         self.previous_parent=current
         nearby={p.id for p in navigator.roof_index.query(point)}
@@ -91,7 +99,7 @@ class WorldMapView:
             parent=self.parents[pid]
             fade,solid=self.layers[parent.id,"Roof"]
             value=navigator.roof_opacity(parent,point) if pid in nearby or pid==current else 1.
-            opacity(fade,value)
+            set_opacity(fade,value)
             if value<1:fading.add(pid)
         self.faded_roofs=fading
         dirty.extend(self.object_roofs.update(point))

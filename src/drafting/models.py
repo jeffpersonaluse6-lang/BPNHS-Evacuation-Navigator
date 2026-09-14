@@ -9,9 +9,10 @@ import uuid
 from .roof import roof_seams,structure_roof_primitives,ROOF_KINDS
 from .circular import ellipse_points,solid_arcs,CircleOpening,validate_openings,load_openings
 
+GATE_KINDS = {"main_gate", "secondary_gate"}
 KINDS = {"room", "rectangle", "floor", "ellipse", "wall", "line", "door", "double_door",
          "opening", "window", "stairs", "text", "dimension", "roof", "railing", "building", "entry_zone",
-         "circle_wall","gazebo_roof","court_roof"}
+         "circle_wall","gazebo_roof","court_roof"} | GATE_KINDS
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ class DraftItem:
     collision_thickness: float | None = None
     opacity: float = 1
     circle_openings: tuple[CircleOpening,...] = ()
+    gate_open: bool = False
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
     def local_to_world(self, x, y):
@@ -156,6 +158,23 @@ def primitives(item):
     elif item.kind == "window":
         box(0,0,w,h,"#FFFFFF")
         line([(0,h/2),(w,h/2)])
+    elif item.kind in GATE_KINDS:
+        post=max(6,min(18,w*.07))
+        box(0,0,post,h,item.color,item.color,0)
+        box(w-post,0,post,h,item.color,item.color,0)
+        y=h/2
+        if item.kind=="main_gate":
+            if item.gate_open:
+                line([(post,y),(post+w*.28,max(0,y-h*.42))],stroke=max(3,item.stroke*.65))
+                line([(w-post,y),(w-post-w*.28,max(0,y-h*.42))],stroke=max(3,item.stroke*.65))
+            else:
+                line([(post,y),(w/2,y)],stroke=max(3,item.stroke*.65))
+                line([(w/2,y),(w-post,y)],stroke=max(3,item.stroke*.65))
+        else:
+            if item.gate_open:
+                line([(post,y),(post+w*.55,max(0,y-h*.42))],stroke=max(3,item.stroke*.65))
+            else:
+                line([(post,y),(w-post,y)],stroke=max(3,item.stroke*.65))
     elif item.kind == "stairs":
         box(0,0,w,h,"#FFFFFF")
         for i in range(item.steps):
@@ -204,6 +223,8 @@ def validate_item(item):
         raise ValueError("Invalid text or object ID")
     if type(item.mirrored) is not bool:
         raise ValueError("Invalid mirror flag")
+    if type(item.gate_open) is not bool:
+        raise ValueError("Gate open state must be a boolean")
     if type(item.blocking) is not bool or type(item.floor_count) is not int or item.floor_count < 1:
         raise ValueError("Invalid collision flag or floor count")
     if item.collision_thickness is not None and (isinstance(item.collision_thickness,bool) or

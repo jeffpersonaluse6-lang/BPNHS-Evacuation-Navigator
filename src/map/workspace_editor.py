@@ -7,7 +7,7 @@ import time
 import flet as ft
 import flet.canvas as cv
 from drafting.editor import BuildingDraftEditor,TOOLS,STAMP_SIZES
-from drafting.models import DraftDocument,validate_item
+from drafting.models import DraftDocument,validate_item,GATE_KINDS
 from drafting.circular import CIRCLE_KINDS,diameter_values
 from drafting.roof import ROOF_KINDS
 from drafting.handles import transform
@@ -246,7 +246,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         controls=[self.selected_label,self.object_picker,self.floor_picker,self.owner,self.status,self.reference_label,
             self.building_actions,self.selected_building_name,self.edit_building_button,
             self.undo_button,self.redo_button,self.duplicate_button,self.delete_button,self.map_size_button,
-            self.map_width,self.map_height,self.mirror,self.flip_vertical_button,self.blocks,self.length,self.floor_count,self.fade,self.approach,
+            self.map_width,self.map_height,self.mirror,self.flip_vertical_button,self.blocks,self.gate_open,self.length,self.floor_count,self.fade,self.approach,
             self.railings.control,self.railings.slider,
             self.collision_editor.control,self.collision_editor.field,self.collision_editor.slider,
             self.stair_editor.control,self.stair_editor.source,self.stair_editor.target,self.stair_editor.direction,
@@ -359,7 +359,8 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             self.collision_editor.sync(item,len(selected_items)>1)
             self.stair_editor.sync(item,len(selected_items)>1)
             self.structures.sync(item,len(selected_items)>1)
-            self.blocks.visible=bool(item and item.kind in COLLISION_KINDS)
+            self.blocks.visible=bool(item and item.kind in COLLISION_KINDS and item.kind not in GATE_KINDS)
+            self.gate_open.visible=bool(item and item.kind in GATE_KINDS)
             self.floor_count.visible=bool(item and item.kind=="building")
             self.approach.visible=bool(item and item.kind in ROOF_KINDS|{"building"})
             owner_options=[("","No attachment")]+[(i.id,f"{i.kind}: {i.text}") for i in self.editable_items() if item and i.id!=item.id]
@@ -373,6 +374,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
                 for key,field in self.properties.items(): field.value=str(getattr(item,key))
                 self.mirror.value=item.mirrored
                 self.blocks.value=item.blocking
+                self.gate_open.value=item.gate_open
                 if item.kind in STAIR_KINDS:self.blocks.value=item.blocking and item.collision_thickness is not None
                 self.length.value=f"{math.hypot(item.width,item.height):g}"
                 self.floor_count.value=str(item.floor_count)
@@ -426,6 +428,12 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         if kind=="circle_wall":return replace(item,stroke=8,collision_thickness=8,fill="none",text="Circle Wall")
         if kind=="gazebo_roof":return replace(item,fill="#BA8B49",color="#68481D",blocking=False,text="Gazebo Roof")
         if kind=="court_roof":return replace(item,fill="#9CAFBF",color="#445869",blocking=False,text="Court Roof")
+        if kind=="main_gate":
+            return replace(item,stroke=10,color="#1F2937",fill="none",blocking=True,
+                collision_thickness=12,gate_open=False,text="Main Gate")
+        if kind=="secondary_gate":
+            return replace(item,stroke=8,color="#475569",fill="none",blocking=True,
+                collision_thickness=10,gate_open=False,text="Secondary Gate")
         if kind in {"wall","room"}:return replace(item,collision_thickness=collision_thickness(item))
         if kind in STAIR_KINDS:
             source=int(self.floor.split()[-1]) if ":Floor " in self.floor else None
