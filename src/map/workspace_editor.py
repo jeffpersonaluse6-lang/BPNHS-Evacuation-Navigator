@@ -35,8 +35,10 @@ from .structure_editor import StructureEditor
 from navigation.stairs import STAIR_KINDS,indicators
 
 MAP_TOOLS=[("select","Select"),("pan","Pan"),("building","Building"),("room","Room"),
-    ("wall","Wall"),("circle_wall","Circle Wall"),("railing","Railing / barrier"),("floor","Floor section"),("entry_zone","Entry / approach area")]+[(k,v) for k,v in TOOLS if k not in {"select","pan","room","wall","circle_wall"}]
-MAP_STAMPS={**STAMP_SIZES,"building":(300,180),"railing":(200,0),"floor":(300,180),"entry_zone":(180,120)}
+    ("wall","Wall"),("circle_wall","Circle Wall"),("railing","Railing / barrier"),("road","Road / Path"),("floor","Floor section"),
+    ("entry_zone","Entry / approach area"),("evacuation_area","Evacuation Area")]+[(k,v) for k,v in TOOLS if k not in {"select","pan","room","wall","circle_wall"}]
+MAP_STAMPS={**STAMP_SIZES,"building":(300,180),"railing":(200,0),"floor":(300,180),
+    "entry_zone":(180,120),"evacuation_area":(220,140)}
 LINE_KINDS={"line","wall","railing"}
 
 
@@ -401,7 +403,7 @@ class MapWorkspaceEditor(BuildingDraftEditor):
         if kind=="building" and not getattr(self,"building_session",False):
             self.open_building_editor()
             return
-        if kind=="building" and self.floor!=CAMPUS:
+        if kind in {"building","evacuation_area","road"} and self.floor!=CAMPUS:
             self.change_scope(CAMPUS)
         self.cancel_gesture(update=False)
         self.tool=kind
@@ -439,11 +441,17 @@ class MapWorkspaceEditor(BuildingDraftEditor):
             source=int(self.floor.split()[-1]) if ":Floor " in self.floor else None
             return replace(item,stair_from=source,stair_direction=self.new_stair_direction if kind=="stairs" else item.stair_direction)
         if kind=="floor": return replace(item,stroke=0,fill="#FFFFFF",blocking=False,text="Floor section")
+        if kind=="road":
+            return replace(item,stroke=2,color="#6B7280",fill="#9CA3AF",
+                text="Road / Path",blocking=False,collision_thickness=None)
         if kind=="railing":
             item=replace(item,stroke=10,color="#475569",text="Railing")
             return replace(item,collision_thickness=collision_thickness(item))
         if kind=="building": return replace(item,fill="#F5DF85",color="#263238",text="New building",opens=f"scene:{item.id}")
         if kind=="entry_zone": return replace(item,fill="none",color="#059669",text="Entry area",blocking=False)
+        if kind=="evacuation_area":
+            return replace(item,fill="#DCFCE7",color="#16A34A",stroke=3,
+                text="Evacuation Area",blocking=False)
         return item
 
     def hit_handle(self,item,x,y):

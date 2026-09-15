@@ -12,7 +12,7 @@ from .circular import ellipse_points,solid_arcs,CircleOpening,validate_openings,
 GATE_KINDS = {"main_gate", "secondary_gate"}
 KINDS = {"room", "rectangle", "floor", "ellipse", "wall", "line", "door", "double_door",
          "opening", "window", "stairs", "text", "dimension", "roof", "railing", "building", "entry_zone",
-         "circle_wall","gazebo_roof","court_roof"} | GATE_KINDS
+         "evacuation_area", "road", "circle_wall","gazebo_roof","court_roof"} | GATE_KINDS
 
 
 @dataclass(frozen=True)
@@ -122,7 +122,7 @@ def primitives(item):
                 h - h * math.sin(t * math.pi / 128)) for t in range(65)]
         line(arc)
 
-    if item.kind in {"room", "rectangle", "floor", "entry_zone"}:
+    if item.kind in {"room", "rectangle", "floor", "entry_zone", "evacuation_area", "road"}:
         box(0,0,w,h,item.fill)
     elif item.kind == "roof":
         box(0,0,w,h,item.fill)

@@ -25,7 +25,7 @@ def owner_for(item,items):
                 distance=math.hypot(center[0]-start[0]-t*dx,center[1]-start[1]-t*dy)
                 if 0<=t<=1 and distance<=radius+8: candidates.append((distance,wall.id))
         if candidates: return min(candidates)[1]
-    if item.kind not in {"room","building","entry_zone"}:
+    if item.kind not in {"room","building","entry_zone","evacuation_area","road"}:
         center=item.local_to_world(item.width/2,item.height/2)
         rooms=[room for room in items if room.kind=="room" and room.contains(*center,tolerance=0)]
         if rooms: return min(rooms,key=lambda room:room.width*room.height).id
@@ -64,7 +64,7 @@ def related(items,ids,ancestors=False,*,structures=False):
         for item in items:
             if (structures and item.parent_id in ids) or (item.group_id and item.group_id in groups):
                 ids.add(item.id)
-            if item.id in ids or item.kind in {"building","entry_zone"}: continue
+            if item.id in ids or item.kind in {"building","entry_zone","evacuation_area","road"}: continue
             # A room selection includes its furniture, stairs, and railings.
             for room in rooms:
                 points=[item.local_to_world(*p) for p in
