@@ -298,22 +298,16 @@ class EvacuationApp:
     def movement_tick(self,dt):
         if (not self.active or not self.viewer or not math.isfinite(dt) or dt<=0 or dt>.5
                 or (not self.state.move_mode and not self.follow_active)):return
-        # Integrate long frames in bounded simulation steps, but submit ONE UI
-        # patch per frame. Regular lag retains elapsed time; a suspended app
-        # deliberately discards its pause rather than teleporting on resume.
-        remaining=dt
         visual_before=self.navigator.visual_state()
-        moved=False;camera_changed=False
-        while remaining>1e-9:
-            step=min(1/120,remaining);remaining-=step
-            before=self._marker_center()
-            visible=self.viewer.camera.visible(before,self.state.player_size)
-            if visible and self.state.move_mode and (self.state.joystick_x or self.state.joystick_y):
-                x,y=self.navigator.walk(before,self.state.joystick_x,self.state.joystick_y,step)
-                self.state.marker_x,self.state.marker_y=x-MARKER_SIZE/2,y-MARKER_SIZE/2
-            after=self._marker_center();moving=after!=before;moved=moved or moving
-            camera_changed=self.viewer.camera.follow(after,step,moving=moving,
-                diameter=self.state.player_size,guard=visible) or camera_changed
+        before=self._marker_center()
+        visible=self.viewer.camera.visible(before,self.state.player_size)
+        if visible and self.state.move_mode and (self.state.joystick_x or self.state.joystick_y):
+            x,y=self.navigator.walk(before,self.state.joystick_x,self.state.joystick_y,dt)
+            self.state.marker_x,self.state.marker_y=x-MARKER_SIZE/2,y-MARKER_SIZE/2
+        after=self._marker_center()
+        moved=after!=before
+        camera_changed=self.viewer.camera.follow(after,dt,moving=moved,
+            diameter=self.state.player_size,guard=visible)
         if camera_changed:self.viewer.apply(False)
         if moved or self.navigator.visual_state()!=visual_before:
             self._update_world([self.viewer.scene] if camera_changed else [])

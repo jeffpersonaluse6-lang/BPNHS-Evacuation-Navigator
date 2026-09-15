@@ -191,10 +191,10 @@ class WorldNavigator:
         self.phase=TransitionPhase.WAIT_FOR_EXIT
         return False
 
-    def detect_stair_entry(self,local):
+    def detect_stair_entry(self,local,world_point=None):
         """Find the first armed stair zone the player is entering from the start end."""
         if self.transition is not None or self.exit_areas:return None
-        point=self.transforms[self.parent.id].project(*local) if self.parent else local
+        point=world_point if world_point is not None else (self.transforms[self.parent.id].project(*local) if self.parent else local)
         ENTRY_BAND=TRANSITION_THRESHOLD
         for zone in self.nearby_candidates(point,self.previous_world_point):
             if not self.stair_armed(zone):continue
@@ -250,7 +250,7 @@ class WorldNavigator:
                 self.lock_overlapping(local)
                 self.phase=TransitionPhase.ON_FLOOR
         else:
-            zone=self.detect_stair_entry(local)
+            zone=self.detect_stair_entry(local,point)
             if zone:
                 self.transition=FloorTransition(zone,self.state.floor,zone.target,progress(zone,local)[0])
                 self.phase=TransitionPhase.ENTERING_STAIRS
@@ -281,13 +281,12 @@ class WorldNavigator:
 
     def allowed(self,point):
         floors={self.state.floor if self.parent else 1}
-        if self.parent:
+        if self.parent and self.transition:
             local=self.transforms[self.parent.id].unproject(*point)
-            if self.transition:
-                p,lateral,raw=progress(self.transition.section,local)
-                if not lateral:return False
-                floors=({self.transition.source} if raw<=0 else {self.transition.target} if raw>=1 else
-                    {self.transition.source,self.transition.target})
+            p,lateral,raw=progress(self.transition.section,local)
+            if not lateral:return False
+            floors=({self.transition.source} if raw<=0 else {self.transition.target} if raw>=1 else
+                {self.transition.source,self.transition.target})
         radius=self.state.collision_radius
         if 1 in floors and any(b.blocks(*point,radius) for b in self.ground_index.query(point,padding=radius)):return False
         for floor in floors:

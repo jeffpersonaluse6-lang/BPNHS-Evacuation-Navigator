@@ -86,6 +86,10 @@ class CameraViewport(ft.GestureDetector):
 
     def apply(self,update=True):
         camera=self.camera
+        if (hasattr(self,'_prev_cam') and self._prev_cam==(
+                camera.x,camera.y,camera.rotation,camera.scale)):
+            return
+        self._prev_cam=(camera.x,camera.y,camera.rotation,camera.scale)
         self.scene.transform=ft.Transform(matrix=ft.Matrix4.identity().translate(camera.x,camera.y)
             .rotate_z(camera.rotation).scale(camera.scale,camera.scale))
         if update:self.scene.update()
